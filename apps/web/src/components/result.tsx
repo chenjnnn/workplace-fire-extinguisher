@@ -7,6 +7,7 @@ import {
   VILLAINS,
   avatarPersona,
   computeStars,
+  missingTargets,
   pickPuaLine,
   pickShowdown,
   showdownBest,
@@ -66,6 +67,23 @@ export function ResultOverlay({
             ? '步数用完了，再来一次'
             : '再来一次就能清干净'}
       </p>
+
+      {/* 失败：还差什么颜色 */}
+      {!won && (
+        <section className="mt-3 rounded-xl bg-white/92 px-4 py-3">
+          <p className="text-[11px] font-medium text-[#a89e93]">还差</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            {missingTargets(state).map((m, i) => (
+              <span
+                key={i}
+                className="flex items-center gap-1 rounded-full bg-[#fff1e6] px-2.5 py-1 text-[12px] font-bold text-[#c2410c]"
+              >
+                {VILLAINS[m.type].name} × {m.left}
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* 失败：领导 PUA 你 */}
       {!won && (

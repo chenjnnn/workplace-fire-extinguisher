@@ -52,11 +52,12 @@ function ellipse(
 }
 
 const SOFT_COLORS: Record<VillainType, string> = {
-  pua: '#d9f6ff',
-  shirk: '#e9ffd0',
-  grafter: '#fff3c4',
-  overtime: '#ffdfe6',
-  formalist: '#f2e2ff',
+  pua: '#dbeafe',
+  shirk: '#dcfce7',
+  grafter: '#fef3c7',
+  overtime: '#fee2e2',
+  formalist: '#f3e8ff',
+  flatterer: '#fce7f3',
 };
 
 /**
@@ -448,22 +449,27 @@ export function drawTileSprite(
 }
 
 /** 参考图那种低饱和纯色底 */
+/**
+ * 棋盘底色 —— 严格限定为六种：红 / 紫 / 蓝 / 黄 / 绿 / 浅粉。
+ * 不再使用其他颜色，避免玩家在小尺寸下把两种颜色看混。
+ */
 const FLAT_BG: Record<VillainType, string> = {
-  // 五个底色在色相环上均分，明度也拉开 —— 小尺寸下靠底色就能分
-  pua: '#1e40af', // 深蓝
-  shirk: '#22c55e', // 亮绿
-  grafter: '#fbbf24', // 明黄
-  overtime: '#ef4444', // 亮红
-  formalist: '#a855f7', // 亮紫
+  overtime: '#ef4444', // 红
+  formalist: '#a855f7', // 紫
+  pua: '#3b82f6', // 蓝
+  grafter: '#fbbf24', // 黄
+  shirk: '#22c55e', // 绿
+  flatterer: '#f9a8d4', // 浅粉
 };
 
 /** 西装颜色（比底色更深一档，形成层次） */
 const FLAT_SUIT: Record<VillainType, string> = {
-  pua: '#1d3557',
-  shirk: '#4f7038',
-  grafter: '#a8761e',
-  overtime: '#a03023',
-  formalist: '#573a75',
+  pua: '#1e3a8a',
+  shirk: '#166534',
+  grafter: '#92400e',
+  overtime: '#7f1d1d',
+  formalist: '#581c87',
+  flatterer: '#9d174d',
 };
 
 /**
@@ -805,11 +811,12 @@ function drawFlatBoss(
 }
 
 const FLAT_TIE: Record<VillainType, string> = {
-  pua: '#3d6a9e',
-  shirk: '#a8c48a',
-  grafter: '#f2c14e',
-  overtime: '#e8735f',
-  formalist: '#a98bc7',
+  pua: '#1d4ed8',
+  shirk: '#15803d',
+  grafter: '#b45309',
+  overtime: '#991b1b',
+  formalist: '#7e22ce',
+  flatterer: '#be185d',
 };
 
 /** 极简黑点眼 */

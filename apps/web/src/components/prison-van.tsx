@@ -1,26 +1,40 @@
 'use client';
 
 /**
- * 囚车 —— 替代抽象的进度条
+ * 囚车 —— 按颜色顺序抓人
  *
- * 用户的原话：「上面的收网和进度条的关系很不明确，可以把进度条换成一个囚车或者监狱，
- * 然后每消掉一次，就放上去一个对应的头像，然后满多少个说明过关。」
+ * 用户的要求：「每关配置一个 targetSequence 数组，按顺序列出需要的颜色；
+ * 只有当前目标颜色的消除才计入当前隔间；其他颜色照常消除得分，但不推进囚车。
+ * 当前隔间完成后打勾变灰，自动推进到下一个颜色。」
  *
- * 设计要点：
- *   1. 车厢用深灰蓝，铁栏用浅色竖线 —— 对比强，一眼就是「笼子」
- *   2. 固定 8 个牢房位，每格代表 total/8 的进度（目标动辄 30-80，不可能真放 80 个）
- *   3. 关进去的放对应类型的头像，空的画成空牢房
- *   4. 收网做成车厢右侧的「警笛」按钮，怒值满了才亮
+ * 为什么顺序比「凑够总数」好：
+ *   凑总数时消哪种颜色都一样，玩家不需要看目标；
+ *   指定顺序之后，「现在该抓粉色」变成一条明确指令，
+ *   每一次交换都在为当前这一格服务。
+ *
+ * 三种状态：
+ *   done    —— 已抓完，变灰打勾
+ *   current —— 正在抓，亮色描边 + 呼吸点
+ *   future  —— 还没轮到，压暗
  */
 
 import type { VillainType } from '@vc/core';
 import { VillainTile } from '@/components/art';
 
-interface Props {
+interface VanSlot {
+  type: VillainType;
+  name: string;
+  color: string;
+  state: 'done' | 'current' | 'future';
   current: number;
-  total: number;
-  recentTypes: VillainType[];
-  fallbackType: VillainType;
+  need: number;
+}
+
+interface Props {
+  sequence: VanSlot[];
+  /** 还能跳过几次（每消 5 个非目标色换 1 次） */
+  skipsLeft: number;
+  onSkip: () => void;
   /** 收网：能不能用 */
   canSweep: boolean;
   /** 本关还能用几次收网 */
@@ -28,85 +42,115 @@ interface Props {
   onSweep: () => void;
 }
 
-/** 囚车上的固定牢房数 */
-const SLOTS = 12;
-
-export function PrisonVan({
-  current,
-  total,
-  recentTypes,
-  fallbackType,
-  canSweep,
-  sweepLeft,
-  onSweep,
-}: Props) {
-  const perSlot = total / SLOTS;
-  const filledSlots = total === 0 ? SLOTS : Math.min(SLOTS, Math.round(current / perSlot));
-  const done = current >= total;
+export function PrisonVan({ sequence, skipsLeft, onSkip, canSweep, sweepLeft, onSweep }: Props) {
+  const doneCount = sequence.filter((s) => s.state === 'done').length;
+  const allDone = sequence.length > 0 && doneCount === sequence.length;
   const sweepUsable = canSweep && sweepLeft > 0;
+
+  // 隔间多的时候缩小头像，保证一行放得下
+  const tileSize = sequence.length >= 7 ? 18 : sequence.length >= 5 ? 22 : 26;
 
   return (
     <section className="mt-2 shrink-0">
       <div className="flex items-stretch gap-2">
         {/* ---- 囚车 ---- */}
         <div className="flex-1">
-          {/* 车顶标题 */}
           <div className="mb-1 flex items-baseline justify-between px-0.5">
             <span className="flex items-center gap-1 text-[11px] font-bold text-[#5a5148]">
               <span className="text-[13px] leading-none">🚔</span>
               囚车
             </span>
             <span className="font-num text-[11px] leading-none">
-              <span style={{ color: done ? '#2e8b57' : '#ff6b4a' }}>{Math.min(current, total)}</span>
-              <span className="text-[#b8a892]"> / {total}</span>
+              <span style={{ color: allDone ? '#2e8b57' : '#ff6b4a' }}>{doneCount}</span>
+              <span className="text-[#b8a892]"> / {sequence.length} 间</span>
             </span>
           </div>
 
-          {/* 车厢（深色） */}
+          {skipsLeft > 0 && (
+            <button
+              type="button"
+              onClick={onSkip}
+              className="mb-1 flex w-full items-center justify-center gap-1 rounded-md bg-[#fff3e8] py-1 text-[10px] font-bold text-[#ff6b4a] active:scale-[0.98]"
+            >
+              ⏭ 跳过这一格（还剩 {skipsLeft} 次）
+            </button>
+          )}
+
           <div className="relative rounded-t-[10px] rounded-b-[4px] bg-[#3d4655] px-1.5 pb-2 pt-1.5">
-            {/* 顶部警灯条 */}
+            {/* 警灯 */}
             <div className="mb-1 flex justify-center gap-1">
               <span
                 className="h-1 w-4 rounded-full"
-                style={{ backgroundColor: done ? '#4ade80' : '#ff5f5f' }}
+                style={{ backgroundColor: allDone ? '#4ade80' : '#ff5f5f' }}
               />
               <span
                 className="h-1 w-4 rounded-full"
-                style={{ backgroundColor: done ? '#4ade80' : '#4aa3ff' }}
+                style={{ backgroundColor: allDone ? '#4ade80' : '#4aa3ff' }}
               />
             </div>
 
-            {/* 牢房 */}
-            <div className="relative flex items-center gap-[2px]">
-              {Array.from({ length: SLOTS }).map((_, i) => {
-                const filled = i < filledSlots;
-                const type = recentTypes[i] ?? fallbackType;
+            {/* 隔间：按顺序排 */}
+            <div className="flex items-stretch gap-1">
+              {sequence.map((slot, i) => {
+                const done = slot.state === 'done';
+                const isCurrent = slot.state === 'current';
+                const ratio = slot.need === 0 ? 1 : Math.min(1, slot.current / slot.need);
+
                 return (
                   <div
                     key={i}
-                    className="relative flex aspect-square flex-1 items-center justify-center overflow-hidden rounded-[3px]"
-                    style={{ backgroundColor: filled ? '#fff3e8' : '#2b323d' }}
+                    className="relative flex flex-1 flex-col items-center rounded-[4px] px-0.5 py-1 transition-all"
+                    style={{
+                      backgroundColor: done ? '#1f3a2a' : isCurrent ? '#3a4454' : '#262c36',
+                      ...(isCurrent
+                        ? { boxShadow: `0 0 0 2px ${slot.color}`, transform: 'scale(1.05)' }
+                        : {}),
+                    }}
                   >
-                    {filled ? (
-                      <VillainTile type={type} size={20} />
-                    ) : (
-                      // 空牢房：画三根竖栏，一眼是笼子
-                      <span className="flex h-full w-full items-center justify-center gap-[2px]">
-                        {[0, 1, 2].map((k) => (
-                          <span key={k} className="h-3/4 w-[1.5px] rounded-full bg-white/14" />
-                        ))}
-                      </span>
-                    )}
+                    {/* 打勾 / 头像 */}
+                    <div className="relative flex items-center justify-center">
+                      {done ? (
+                        <div
+                          className="flex items-center justify-center rounded-full bg-[#2e8b57]"
+                          style={{ width: tileSize, height: tileSize }}
+                        >
+                          <span className="text-[11px] leading-none text-white">✓</span>
+                        </div>
+                      ) : (
+                        <div style={{ opacity: isCurrent ? 1 : 0.42 }}>
+                          <VillainTile type={slot.type} size={tileSize} />
+                        </div>
+                      )}
+
+                      {isCurrent && (
+                        <span
+                          className="absolute -right-1 -top-1 h-2 w-2 animate-pulse rounded-full"
+                          style={{ backgroundColor: slot.color }}
+                        />
+                      )}
+                    </div>
+
+                    {/* 已消/need */}
+                    <span
+                      className="font-num mt-0.5 text-[9px] leading-none"
+                      style={{ color: done ? '#7dd3a0' : isCurrent ? '#ffffff' : '#8b95a3' }}
+                    >
+                      {Math.min(slot.current, slot.need)}/{slot.need}
+                    </span>
+
+                    {/* 进度条 */}
+                    <div className="mt-1 h-[3px] w-full overflow-hidden rounded-full bg-white/15">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${(done ? 1 : ratio) * 100}%`,
+                          backgroundColor: done ? '#4ade80' : slot.color,
+                        }}
+                      />
+                    </div>
                   </div>
                 );
               })}
-            </div>
-
-            {/* 铁栏杆：盖在牢房之间的分隔上 */}
-            <div className="pointer-events-none absolute inset-x-1.5 bottom-2 top-[30px] flex justify-between">
-              {Array.from({ length: SLOTS + 1 }).map((_, i) => (
-                <span key={i} className="w-[2px] rounded-full bg-white/35" />
-              ))}
             </div>
           </div>
 
@@ -133,9 +177,7 @@ export function PrisonVan({
           aria-label="收网行动"
         >
           <span className="text-[22px] leading-none">🚨</span>
-          <span className="text-[10px] font-bold leading-none">
-            {sweepUsable ? '收网' : '未满'}
-          </span>
+          <span className="text-[10px] font-bold leading-none">{sweepUsable ? '收网' : '未满'}</span>
           {sweepLeft > 0 && (
             <span
               className="absolute right-1 top-1 rounded-full px-1 text-[8px] leading-none"

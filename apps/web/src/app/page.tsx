@@ -44,6 +44,7 @@ const SHORT_LABEL: Record<VillainType, string> = {
   grafter: '抢功',
   overtime: '逼加班',
   formalist: '走流程',
+  flatterer: '拍马屁',
 };
 
 export default function HomePage() {

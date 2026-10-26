@@ -16,7 +16,7 @@
  * 每个类型都对应一种具体的职场伤害，机制也呼应这种伤害：
  *   甩锅侠会「甩锅」污染相邻格，抢功精要「清两次」才倒。
  */
-export type VillainType = 'pua' | 'shirk' | 'grafter' | 'overtime' | 'formalist';
+export type VillainType = 'pua' | 'shirk' | 'grafter' | 'overtime' | 'formalist' | 'flatterer';
 
 export interface VillainDef {
   type: VillainType;
@@ -85,6 +85,17 @@ export const VILLAINS: Record<VillainType, VillainDef> = {
     hp: 1,
     mechanic: '被打掉时会反咬一口，扣分（不扣步数）',
   },
+  flatterer: {
+    type: 'flatterer',
+    name: '马屁精',
+    tagline: '"领导说得对，我完全同意"',
+    color: '#f472b6',
+    dark: '#be185d',
+    rage: 1,
+    baseScore: 40,
+    hp: 1,
+    mechanic: '基础型：对上一套对下一套，专抢你汇报的机会',
+  },
   formalist: {
     type: 'formalist',
     name: '形式怪',
@@ -98,7 +109,14 @@ export const VILLAINS: Record<VillainType, VillainDef> = {
   },
 };
 
-export const VILLAIN_ORDER: VillainType[] = ['pua', 'shirk', 'grafter', 'overtime', 'formalist'];
+export const VILLAIN_ORDER: VillainType[] = [
+  'pua',
+  'shirk',
+  'grafter',
+  'overtime',
+  'formalist',
+  'flatterer',
+];
 
 /**
  * 游戏模式
@@ -243,6 +261,13 @@ export interface Coord {
  *   救援落底、订单、清冰块需要新的棋盘元素（可掉落的受害者、可覆盖的冰层），
  *   属于独立的机制模块，硬塞进这一轮会做得很糙。留到下一轮单独做。
  */
+/** 囚车上的一个隔间：要抓哪种、要抓几只 */
+export interface TargetStep {
+  type: VillainType;
+  /** 需要消除几只才推进到下一格（第 1-9 关固定 1） */
+  need: number;
+}
+
 export interface LevelGoal {
   /** 要清掉的类型；'any' = 任意类型（清除目标） */
   type: VillainType | 'any';
@@ -283,8 +308,18 @@ export interface LevelConfig {
   types: VillainType[];
   /** 步数上限 */
   moves: number;
-  /** 过关需要达成的目标（全部达成） */
-  goals: LevelGoal[];
+  /**
+   * 囚车任务：要「按颜色顺序」抓的人。
+   *
+   * 为什么用顺序而不是「随便凑够 N 个」：
+   * 随便凑的时候消哪种颜色都一样，玩家不需要看目标；
+   * 指定顺序之后，「现在该抓红色」变成了一条明确指令，
+   * 玩家的每一次交换都在为当前这一格服务。
+   *
+   * 第 1-9 关每格 need = 1（抓到一只就推进）；
+   * 第 10 关起需要 need > 1（同一颜色要抓够几只才推进）。
+   */
+  targetSequence: TargetStep[];
   /** 过关最低分数（星级线依次为 minScore / 2星线 / 3星线） */
   minScore: number;
   starScores: [number, number, number];
@@ -382,6 +417,14 @@ export interface GameState {
   pendingQuiz: import('./quiz.ts').Quiz | null;
   /** 已经答过多少题（用于判断下一次该不该弹） */
   quizzesTaken: number;
+  /** 当前正在抓第几个隔间（0 开始） */
+  seqIndex: number;
+  /** 当前隔间已经抓了几只 */
+  seqProgress: number;
+  /** 非目标色消除的累计数（每满 5 个可以「跳过当前目标」） */
+  offTargetCleared: number;
+  /** 已经跳过了几次 */
+  skipsUsed: number;
   /** 整局累计的救援结果，给结算页用 */
   rescuedCount: number;
   lostCount: number;

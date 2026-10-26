@@ -246,6 +246,15 @@ export const SHOWDOWNS: Record<VillainType, Showdown> = {
       },
     ],
   },
+  flatterer: {
+    boss: 'flatterer',
+    taunt: '这个想法不错，不过我已经跟张总说过了，他说让我牵头。',
+    options: [
+      { text: '那您牵头，我配合。', tone: 'submit', reaction: '他满意地拍了拍你的肩。', bonus: 0 },
+      { text: '张总知道这个想法是谁先提的吗？', tone: 'counter', reaction: '他脸上的笑僵了一下。', bonus: 1 },
+      { text: '那我们各自做一版，让张总选。', tone: 'neutral', reaction: '他不太情愿地点了点头。', bonus: 0 },
+    ],
+  },
 };
 
 /** 抽一个对应领导的 showdown */
@@ -285,6 +294,9 @@ export const VICTIMS: Record<VillainType, VictimProfile[]> = {
   formalist: [
     { name: '林姐', situation: '一天开了六个会，一件正事没做' },
     { name: '阿强', situation: '周报写了 8000 字，项目原地踏步' },
+  ],
+  flatterer: [
+    { name: '小林', situation: '提的想法被领导在会上说成自己的' },
   ],
 };
 

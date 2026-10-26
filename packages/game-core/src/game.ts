@@ -33,6 +33,7 @@ import type {
   LevelConfig,
   RescueTarget,
   SwapResult,
+  TargetStep,
   Tile,
   VillainType,
 } from './types.ts';
@@ -169,6 +170,10 @@ export function createGame(levelId: number, seed?: number, mode: GameMode = 'nor
     rescues,
     pendingQuiz: null,
     quizzesTaken: 0,
+    seqIndex: 0,
+    seqProgress: 0,
+    offTargetCleared: 0,
+    skipsUsed: 0,
     rescuedCount: 0,
     lostCount: 0,
     rescuePenalty: 0,
@@ -193,6 +198,7 @@ function emptyCount(): Record<VillainType, number> {
     grafter: 0,
     overtime: 0,
     formalist: 0,
+    flatterer: 0,
   };
 }
 
@@ -499,7 +505,21 @@ function removeCleared(board: Board, cleared: Coord[]): Board {
  *
  * 关键：新格子的 viewRow 是负数，渲染层据此播「从上掉下来」的动画。
  */
-function refillBoard(board: Board, level: LevelConfig, rng: Rng): Board {
+/**
+ * 补块。
+ *
+ * `weightedType` 是「保底」用的：当囚车当前要抓的颜色在棋盘上不足 3 个时，
+ * 新块的生成会偏向这个颜色，避免出现「目标色一直不来」的死等。
+ *
+ * 为什么需要它：顺序囚车下，如果当前目标色在棋盘上只剩 1-2 个，
+ * 玩家可能连续十几步都推进不了，体验是「卡住了」而不是「难」。
+ */
+function refillBoard(
+  board: Board,
+  level: LevelConfig,
+  rng: Rng,
+  weightedType?: VillainType | null,
+): Board {
   const next = board.map((row) => [...row]);
   const rows = next.length;
   const cols = next[0]?.length ?? 0;
@@ -515,7 +535,11 @@ function refillBoard(board: Board, level: LevelConfig, rng: Rng): Board {
     // 从上往下找到第一个空位之前的连续非空段会自然下落，
     // 这里只需要在顶部生成 holes 个新格子
     for (let i = 0; i < holes; i += 1) {
-      const type = rng.pick(level.types);
+      // 保底：60% 概率优先给当前目标色
+      const type =
+        weightedType && rng.next() < 0.6 && level.types.includes(weightedType)
+          ? weightedType
+          : rng.pick(level.types);
       const tile = makeTile(type, -1 - i, c, false, rng.int(3));
       tile.state = 'spawning';
       tile.dropFromRow = -1 - i;
@@ -557,6 +581,9 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
   let maxChain = state.maxChain;
   const events: ComboEvent[] = [];
   const clearedCount = { ...state.clearedCount };
+  let seqIndex = state.seqIndex;
+  let seqProgress = state.seqProgress;
+  let offTargetCleared = state.offTargetCleared;
   let totalCleared = 0;
   let rescueState = state;
   let hadMatch = false;
@@ -585,6 +612,34 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     for (const [type, count] of Object.entries(outcome.counts)) {
       const key = type as VillainType;
       clearedCount[key] = (clearedCount[key] ?? 0) + (count ?? 0);
+
+      /**
+       * 囚车是「按颜色顺序」的：
+       *   · 只有当前这一格指定的颜色才推进进度
+       *   · 其他颜色照常得分，但只累计「非目标消除数」（满 5 个可以跳过一格）
+       *   · 一次消太多时会连续推进多个隔间，所以用 while 而不是 if
+       */
+      const seq = state.level.targetSequence;
+      const cleared = count ?? 0;
+      let left = cleared;
+      while (left > 0 && seqIndex < seq.length) {
+        const cur = seq[seqIndex]!;
+        if (cur.type !== key) {
+          offTargetCleared += left;
+          break;
+        }
+        const need = Math.max(1, cur.need);
+        const canPut = Math.min(left, need - seqProgress);
+        seqProgress += canPut;
+        left -= canPut;
+        if (seqProgress >= need) {
+          seqIndex += 1;
+          seqProgress = 0;
+        }
+        if (left <= 0) break;
+      }
+      // 目标已经全部抓完，剩下的都算非目标
+      if (seqIndex >= seq.length && left > 0) offTargetCleared += left;
     }
 
     // 消除结果反馈到救援进度
@@ -604,7 +659,7 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
 
     const gravity = applyGravity(board);
     board = gravity.board;
-    board = refillBoard(board, state.level, rng);
+    board = refillBoard(board, state.level, rng, shortageType(board, state));
 
     // 把「起点」写回掉落后的格子（同一批对象，按引用对上）
     for (let r = 0; r < board.length; r += 1) {
@@ -632,6 +687,8 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
   if (isFull(board) && !findHint(board)) {
     board = shuffleBoard(board, state.level, rng);
     reshuffled = true;
+    // 洗牌后保证当前目标色至少出现 3 个，否则玩家还是没得打
+    board = ensureTargetPresent(board, state, rng);
   }
 
   let next: GameState = {
@@ -645,6 +702,10 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     events,
     totalCleared: state.totalCleared + totalCleared,
     clearedCount,
+    // 囚车（按颜色顺序）的进度
+    seqIndex,
+    seqProgress,
+    offTargetCleared,
     // 救援进度与失败计数从中间态合并回来
     rescues: rescueState.rescues,
     rescuedCount: rescueState.rescuedCount,
@@ -658,7 +719,15 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
   // 判定胜负
   const won = goalsMet(next);
   if (won) {
-    next = { ...next, phase: 'won' };
+    /**
+     * 全部隔间抓完 → 立即通关，剩余步数转成分数。
+     * 这样「提前完成」是有奖励的，玩家会想优化而不是拖到最后一刻。
+     */
+    next = {
+      ...next,
+      phase: 'won',
+      score: next.score + next.movesLeft * 100,
+    };
   } else if (next.movesLeft <= 0) {
     next = { ...next, phase: 'lost' };
   }
@@ -855,32 +924,134 @@ export function answerQuiz(
 }
 
 /**
- * 目标是否全部达成。
- *
- * 'any' 类型的目标看的是「清理总数」，不是某一种类型。
+ * 保证当前目标色在棋盘上至少 3 个（洗牌后用）。
+ * 不够就随机把几个格子改成目标色。
  */
-export function goalsMet(state: GameState): boolean {
-  return state.level.goals.every((goal) => {
-    if (goal.type === 'any') return state.totalCleared >= goal.count;
-    return (state.clearedCount[goal.type] ?? 0) >= goal.count;
-  });
+function ensureTargetPresent(board: Board, state: GameState, rng: Rng): Board {
+  const target = state.level.targetSequence[state.seqIndex];
+  if (!target) return board;
+
+  const spots: Array<{ row: number; col: number }> = [];
+  let count = 0;
+  for (let r = 0; r < board.length; r += 1) {
+    for (let c = 0; c < (board[r]?.length ?? 0); c += 1) {
+      const tile = board[r]?.[c];
+      if (!tile) continue;
+      if (tile.type === target.type) count += 1;
+      else spots.push({ row: r, col: c });
+    }
+  }
+  if (count >= 3) return board;
+
+  const next = board.map((row) => [...row]);
+  for (let i = 0; i < 3 - count; i += 1) {
+    const spot = spots[rng.int(spots.length)];
+    if (!spot) break;
+    const tile = next[spot.row]?.[spot.col];
+    if (!tile) continue;
+    next[spot.row]![spot.col] = { ...tile, type: target.type, hp: VILLAINS[target.type].hp };
+  }
+  return next;
 }
 
-/** 某个目标当前完成了多少 */
-export function goalCurrent(state: GameState, goal: GameState['level']['goals'][number]): number {
-  if (goal.type === 'any') return Math.min(goal.count, state.totalCleared);
-  return Math.min(goal.count, state.clearedCount[goal.type] ?? 0);
-}
-
-/** 目标进度（0-1） */
-export function goalProgress(
+/**
+ * 当前目标色在棋盘上不足 3 个时返回该颜色，否则返回 null。
+ * 用来决定补块要不要「保底加权」。
+ */
+function shortageType(
+  board: Board,
   state: GameState,
-): Array<{ goal: GameState['level']['goals'][number]; current: number; ratio: number }> {
-  return state.level.goals.map((goal) => {
-    const current = goalCurrent(state, goal);
-    return { goal, current, ratio: goal.count === 0 ? 1 : current / goal.count };
+): VillainType | null {
+  const target = state.level.targetSequence[state.seqIndex];
+  if (!target) return null;
+  let count = 0;
+  for (const row of board) {
+    for (const tile of row) {
+      if (tile && tile.type === target.type) count += 1;
+    }
+  }
+  return count < 3 ? target.type : null;
+}
+
+
+/**
+ * 跳过当前囚车间隔（用「非目标消除数」换）。
+ *
+ * 规则：每消除 5 个非目标色，换一次跳过机会。
+ * 跳过拿不到这一格的分数，但可以避免卡在一个暂时打不出来的颜色上。
+ */
+export function skipCurrentTarget(state: GameState): { state: GameState; ok: boolean } {
+  if (state.phase !== 'idle') return { state, ok: false };
+  if (state.seqIndex >= state.level.targetSequence.length) return { state, ok: false };
+
+  const earned = Math.floor(state.offTargetCleared / 5);
+  if (earned <= state.skipsUsed) return { state, ok: false };
+
+  return {
+    state: {
+      ...state,
+      seqIndex: state.seqIndex + 1,
+      seqProgress: 0,
+      skipsUsed: state.skipsUsed + 1,
+    },
+    ok: true,
+  };
+}
+
+/**
+ * 当前要抓的隔间（按 targetSequence 顺序推进）。
+ * 全部抓完时返回 null。
+ */
+export function currentTarget(state: GameState): TargetStep | null {
+  return state.level.targetSequence[state.seqIndex] ?? null;
+}
+
+/** 是否全部隔间都抓完了 */
+export function goalsMet(state: GameState): boolean {
+  return state.seqIndex >= state.level.targetSequence.length;
+}
+
+/**
+ * 囚车面板用的进度数据。
+ *
+ * 三种状态：
+ *   done    —— 已经抓完（打勾变灰）
+ *   current —— 正在抓（显示 已消/need）
+ *   future  —— 还没轮到（只显示颜色和 need）
+ */
+export function sequenceProgress(state: GameState): Array<{
+  step: TargetStep;
+  index: number;
+  state: 'done' | 'current' | 'future';
+  current: number;
+  need: number;
+}> {
+  return state.level.targetSequence.map((step, index) => {
+    if (index < state.seqIndex) {
+      return { step, index, state: 'done' as const, current: step.need, need: step.need };
+    }
+    if (index === state.seqIndex) {
+      return { step, index, state: 'current' as const, current: state.seqProgress, need: step.need };
+    }
+    return { step, index, state: 'future' as const, current: 0, need: step.need };
   });
 }
+
+/**
+ * 失败时还差什么（给结算页用）。
+ */
+export function missingTargets(state: GameState): Array<{ type: VillainType; left: number }> {
+  const rest = state.level.targetSequence.slice(state.seqIndex);
+  if (rest.length === 0) return [];
+  const out: Array<{ type: VillainType; left: number }> = [];
+  for (let i = 0; i < rest.length; i += 1) {
+    const step = rest[i]!;
+    const already = i === 0 ? state.seqProgress : 0;
+    out.push({ type: step.type, left: Math.max(0, step.need - already) });
+  }
+  return out;
+}
+
 
 /**
  * 死局重排：保留所有格子（类型不变），只打乱位置。

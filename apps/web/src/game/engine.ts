@@ -17,7 +17,9 @@ import {
   createRng,
   findHint,
   getCell,
-  goalProgress,
+  sequenceProgress,
+  skipCurrentTarget,
+  currentTarget,
   goalsMet,
   resolveStep,
   answerQuiz,
@@ -47,7 +49,21 @@ export interface HudSnapshot {
   rage: number;
   rageMax: number;
   phase: GameState['phase'];
-  goals: Array<{ type: VillainType | 'any'; name: string; color: string; current: number; count: number }>;
+  /** 囚车：按顺序要抓的颜色（三种状态：done / current / future） */
+  sequence: Array<{
+    type: VillainType;
+    name: string;
+    color: string;
+    state: 'done' | 'current' | 'future';
+    current: number;
+    need: number;
+  }>;
+  /** 当前目标色（棋盘高亮用） */
+  targetType: VillainType | null;
+  /** 非目标消除累计（每 5 个可跳过一格） */
+  offTargetCleared: number;
+  /** 还能跳过几次 */
+  skipsLeft: number;
   combo: { label: string; chain: number; points: number } | null;
   maxChain: number;
   totalCleared: number;
@@ -591,6 +607,16 @@ export class GameEngine {
   }
 
   // ------------------------------------------------------------ 交换
+  /** 跳过当前囚车目标（花一次「非目标消除」换来的机会） */
+  skipTarget(): boolean {
+    if (this.busy || this.state.phase !== 'idle') return false;
+    const result = skipCurrentTarget(this.state);
+    if (!result.ok) return false;
+    this.state = result.state;
+    this.emitHud();
+    return true;
+  }
+
   /** 暂停：停掉渲染循环（菜单打开时用） */
   public pause(): void {
     if (this.paused) return;
@@ -1403,6 +1429,24 @@ export class GameEngine {
     const { cell } = this.layout;
     const { x, y } = this.cellCenter(tile.viewRow, tile.viewCol);
 
+    /**
+     * 当前囚车目标的颜色：在棋子上加一圈呼吸光圈。
+     *
+     * 顺序囚车最关键的是「现在该抓什么」，如果只在顶部面板标出来，
+     * 玩家的视线在棋盘上时根本注意不到。所以直接把提示放到棋盘上。
+     */
+    const target = currentTarget(this.state);
+    if (target && target.type === tile.type && tile.state === 'idle') {
+      const pulse = 0.55 + 0.45 * Math.sin(this.time * 5);
+      ctx.save();
+      ctx.globalAlpha = pulse * 0.85;
+      ctx.strokeStyle = VILLAINS[tile.type].color;
+      ctx.lineWidth = Math.max(2.5, cell * 0.075);
+      roundRect(ctx, x - cell / 2 + 3, y - cell / 2 + 3, cell - 6, cell - 6, cell * 0.28);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // 消除动画：放大后缩小消失
     let scale = tile.scale;
     let alpha = tile.alpha;
@@ -1445,7 +1489,8 @@ export class GameEngine {
   // ------------------------------------------------------------ HUD
   private emitHud(): void {
     const s = this.state;
-    const progress = goalProgress(s);
+    const seq = sequenceProgress(s);
+    const target = currentTarget(s);
 
     // 连击横幅里也展示提示（让 React 侧能显示，而不只是 canvas 上）
     this.options.onHud({
@@ -1454,25 +1499,17 @@ export class GameEngine {
       rage: s.rage,
       rageMax: s.rageMax,
       phase: s.phase,
-      goals: progress.map((p) => {
-        // 'any' 类型的目标没有具体领导，用中性的橙色和自定义标签
-        if (p.goal.type === 'any') {
-          return {
-            type: 'any' as const,
-            name: p.goal.label ?? '清掉所有坏蛋',
-            color: '#f59e0b',
-            current: p.current,
-            count: p.goal.count,
-          };
-        }
-        return {
-          type: p.goal.type,
-          name: VILLAINS[p.goal.type].name,
-          color: VILLAINS[p.goal.type].color,
-          current: p.current,
-          count: p.goal.count,
-        };
-      }),
+      sequence: seq.map((p) => ({
+        type: p.step.type,
+        name: VILLAINS[p.step.type].name,
+        color: VILLAINS[p.step.type].color,
+        state: p.state,
+        current: p.current,
+        need: p.need,
+      })),
+      targetType: target?.type ?? null,
+      offTargetCleared: s.offTargetCleared,
+      skipsLeft: Math.floor(s.offTargetCleared / 5) - s.skipsUsed,
       combo: this.comboDisplay,
       maxChain: s.maxChain,
       totalCleared: s.totalCleared,
@@ -1493,15 +1530,12 @@ export class GameEngine {
           }
         : null,
       overall: (() => {
-        let current = 0;
-        let total = 0;
-        for (const goal of s.level.goals) {
-          total += goal.count;
-          current +=
-            goal.type === 'any'
-              ? Math.min(goal.count, s.totalCleared)
-              : Math.min(goal.count, s.clearedCount[goal.type] ?? 0);
-        }
+        // 顺序囚车：总进度 = 已抓完的隔间数 + 当前隔间的进度
+        const total = s.level.targetSequence.reduce((a, x) => a + Math.max(1, x.need), 0);
+        const done = s.level.targetSequence
+          .slice(0, s.seqIndex)
+          .reduce((a, x) => a + Math.max(1, x.need), 0);
+        const current = Math.min(total, done + s.seqProgress);
         return { current, total, ratio: total === 0 ? 1 : current / total };
       })(),
       rescues: s.rescues.map((r) => ({
@@ -1543,6 +1577,9 @@ export class GameEngine {
     return {
       board,
       hint: findHint(this.state.board),
+      seqIndex: this.state.seqIndex,
+      seqProgress: this.state.seqProgress,
+      offTargetCleared: this.state.offTargetCleared,
       movesLeft: this.state.movesLeft,
       score: this.state.score,
       phase: this.state.phase,
