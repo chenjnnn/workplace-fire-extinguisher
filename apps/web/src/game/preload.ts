@@ -495,11 +495,11 @@ export function drawTileSprite(
 /** 参考图那种低饱和纯色底 */
 const FLAT_BG: Record<VillainType, string> = {
   // 五个底色在色相环上均分，明度也拉开 —— 小尺寸下靠底色就能分
-  pua: '#1e40af', // 深蓝
+  pua: '#f9a8d4', // 浅粉
   shirk: '#22c55e', // 亮绿
   grafter: '#fbbf24', // 明黄
   overtime: '#ef4444', // 亮红
-  formalist: '#a855f7', // 亮紫
+  formalist: '#1f2937', // 近黑
 };
 
 /** 西装颜色（比底色更深一档，形成层次） */

@@ -26,6 +26,8 @@ export interface VanGoal {
   color: string;
   current: number;
   count: number;
+  /** 连击模式：要几连才算 */
+  size?: number;
 }
 
 interface Props {
@@ -105,12 +107,26 @@ export function PrisonVan({ goals, canSweep, sweepLeft, onSweep }: Props) {
                       )}
                     </div>
 
-                    {/* 进度 已关/需要 */}
+                    {/* 连击标签：要几连 */}
+                    {g.size && (
+                      <span
+                        className="mt-0.5 rounded px-1 text-[8px] font-bold leading-tight"
+                        style={{
+                          backgroundColor: filled ? '#2e8b57' : 'rgba(255,255,255,0.14)',
+                          color: filled ? '#fff' : '#c9d0da',
+                        }}
+                      >
+                        {g.size}连
+                      </span>
+                    )}
+
+                    {/* 进度：完成次数 */}
                     <span
                       className="font-num mt-0.5 text-[10px] leading-none"
                       style={{ color: filled ? '#7dd3a0' : '#c9d0da' }}
                     >
                       {Math.min(g.current, g.count)}/{g.count}
+                      {g.size ? '次' : ''}
                     </span>
 
                     {/* 细进度条 */}

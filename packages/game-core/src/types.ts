@@ -264,6 +264,16 @@ export interface LevelGoal {
   count: number;
   /** 目标类型的中文标签（'any' 时用） */
   label?: string;
+  /**
+   * 「连击模式」的目标：至少要几连才算。
+   *
+   * 不填 = 按「消掉 count 个」判定（老规则）；
+   * 填了 3 = 按「完成 count 次 3 连（或以上）」判定。
+   *
+   * 为什么这个更好：按个数判定时，四连和两个三连在数值上没区别，
+   * 玩家不需要考虑「怎么连」；按次数判定就逼着玩家去凑更长的连击。
+   */
+  size?: number;
 }
 
 /** 关卡场景：给玩家一个「我在哪儿、要干什么」的具体画面 */
@@ -396,6 +406,11 @@ export interface GameState {
   pendingQuiz: import('./quiz.ts').Quiz | null;
   /** 已经答过多少题（用于判断下一次该不该弹） */
   quizzesTaken: number;
+  /**
+   * 连击统计：key = `${type}:${size}`，value = 完成了几次。
+   * 例如 'pua:3' = 3 代表「画饼王凑成 3 连的次数」。
+   */
+  matchStats: Record<string, number>;
   /**
    * 罪状簿：每种领导被记了多少条罪状。
    * 集齐 5 条后，消他一个算三个（见 crimes.ts 的 crimeMultiplier）。

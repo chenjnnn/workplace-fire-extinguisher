@@ -48,7 +48,15 @@ export interface HudSnapshot {
   rage: number;
   rageMax: number;
   phase: GameState['phase'];
-  goals: Array<{ type: VillainType | 'any'; name: string; color: string; current: number; count: number }>;
+  goals: Array<{
+    type: VillainType | 'any';
+    name: string;
+    color: string;
+    current: number;
+    count: number;
+    /** 连击模式：要几连才算（不填 = 按个数） */
+    size?: number;
+  }>;
   combo: { label: string; chain: number; points: number } | null;
   maxChain: number;
   totalCleared: number;
@@ -1479,6 +1487,7 @@ export class GameEngine {
             color: '#f59e0b',
             current: p.current,
             count: p.goal.count,
+            size: p.goal.size,
           };
         }
         return {
@@ -1487,6 +1496,7 @@ export class GameEngine {
           color: VILLAINS[p.goal.type].color,
           current: p.current,
           count: p.goal.count,
+          size: p.goal.size,
         };
       }),
       combo: this.comboDisplay,

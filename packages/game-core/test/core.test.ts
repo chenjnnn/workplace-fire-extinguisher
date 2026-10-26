@@ -358,14 +358,23 @@ test('星星数符合阈值', () => {
   assert.equal(computeStars({ ...game, phase: 'lost' }), 0);
 });
 
-test('目标达成判定', () => {
+test('目标达成判定（连击模式按次数算）', () => {
   const game = createGame(1, 42);
   assert.equal(goalsMet(game), false);
+
+  // L1 的目标是「画饼王 3 连 × 4 次」
   const met = {
+    ...game,
+    matchStats: { ...game.matchStats, 'pua:atleast3': 99 },
+  };
+  assert.equal(goalsMet(met), true);
+
+  // 只堆 clearedCount（个数）不再能满足连击目标 —— 这是这次改动的关键
+  const byCount = {
     ...game,
     clearedCount: { ...game.clearedCount, pua: 99 },
   };
-  assert.equal(goalsMet(met), true);
+  assert.equal(goalsMet(byCount), false, '光有清理数不算完成连击目标');
 });
 
 // ---------------------------------------------------------------- 捏人

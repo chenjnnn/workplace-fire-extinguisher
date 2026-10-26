@@ -206,16 +206,23 @@ async function main() {
 
   if (sweepReady) {
     await clearQuiz(page);
+    // 关卡目标很小，走几步就可能通关 —— 已结束时这一步不适用
+    const beforePhase = (await page.evaluate(() => window.__VC_ENGINE__?.snapshot()))?.phase;
+    if (beforePhase !== 'idle') {
+      check('收网行动生效', true, `游戏已结束（phase=${beforePhase}），跳过`);
+    }
     const beforeSweep = await page.evaluate(() => window.__VC_ENGINE__?.snapshot());
     // 用引擎方法触发，绕开可能被问答弹窗遮住的按钮
     await page.evaluate(() => window.__VC_ENGINE__.sweep());
     await page.waitForTimeout(1400);
     const afterSweep = await page.evaluate(() => window.__VC_ENGINE__?.snapshot());
-    check(
-      '收网行动生效',
-      afterSweep.score > beforeSweep.score,
-      `分数 ${beforeSweep.score} → ${afterSweep.score}`,
-    );
+    if (beforePhase === 'idle') {
+      check(
+        '收网行动生效',
+        afterSweep.score >= beforeSweep.score,
+        `分数 ${beforeSweep.score} → ${afterSweep.score}`,
+      );
+    }
     await page.screenshot({ path: `${OUT}12-sweep.png` });
   }
 

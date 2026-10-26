@@ -4,7 +4,7 @@
  * 全部是纯函数，输入棋盘输出坐标，方便单测和复用。
  */
 
-import type { Board, Cell, Coord, Tile } from './types.ts';
+import type { Board, Cell, Coord, Tile, VillainType } from './types.ts';
 
 export function inBounds(board: Board, row: number, col: number): boolean {
   if (!Number.isInteger(row) || !Number.isInteger(col)) return false;
@@ -183,6 +183,76 @@ export function findHint(board: Board): { a: Coord; b: Coord } | null {
   }
 
   return best ? { a: best.a, b: best.b } : null;
+}
+
+/** 一组匹配（同一方向、同一类型的连续 3+ 个） */
+export interface MatchGroup {
+  type: VillainType;
+  /** 这一组有几个（3、4、5……） */
+  length: number;
+  cells: Coord[];
+  horizontal: boolean;
+}
+
+/**
+ * 找出所有匹配「组」，保留每组的长度。
+ *
+ * 为什么需要它：目标从「消掉 N 个」变成「完成 N 次 3 连」之后，
+ * 光知道「消了哪些格子」不够，还得知道「这些格子是几连」。
+ * 4 连和两个 3 连在 findMatches 里都是 4 个坐标，但目标判定完全不同。
+ */
+export function findMatchGroups(board: Board): MatchGroup[] {
+  const rows = board.length;
+  const cols = board[0]?.length ?? 0;
+  const groups: MatchGroup[] = [];
+
+  // 横向
+  for (let r = 0; r < rows; r += 1) {
+    let runStart = 0;
+    for (let c = 1; c <= cols; c += 1) {
+      const prev = getCell(board, r, c - 1);
+      const cur = c < cols ? getCell(board, r, c) : null;
+      const same =
+        prev !== null && cur !== null && !prev.isPot && !cur.isPot && prev.type === cur.type;
+      if (!same) {
+        const len = c - runStart;
+        if (len >= 3) {
+          const sample = getCell(board, r, runStart);
+          if (sample) {
+            const cells: Coord[] = [];
+            for (let k = runStart; k < c; k += 1) cells.push({ row: r, col: k });
+            groups.push({ type: sample.type, length: len, cells, horizontal: true });
+          }
+        }
+        runStart = c;
+      }
+    }
+  }
+
+  // 纵向
+  for (let c = 0; c < cols; c += 1) {
+    let runStart = 0;
+    for (let r = 1; r <= rows; r += 1) {
+      const prev = getCell(board, r - 1, c);
+      const cur = r < rows ? getCell(board, r, c) : null;
+      const same =
+        prev !== null && cur !== null && !prev.isPot && !cur.isPot && prev.type === cur.type;
+      if (!same) {
+        const len = r - runStart;
+        if (len >= 3) {
+          const sample = getCell(board, runStart, c);
+          if (sample) {
+            const cells: Coord[] = [];
+            for (let k = runStart; k < r; k += 1) cells.push({ row: k, col: c });
+            groups.push({ type: sample.type, length: len, cells, horizontal: false });
+          }
+        }
+        runStart = r;
+      }
+    }
+  }
+
+  return groups;
 }
 
 /**

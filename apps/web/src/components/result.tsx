@@ -151,7 +151,7 @@ export function ResultOverlay({
       </div>
 
       {/* 分数 */}
-      <div className="mt-3 rounded-xl bg-white/92 px-5 py-4 text-center shadow-sm">
+      <div className="mt-3 rounded-xl bg-white/70 backdrop-blur-[1px] px-5 py-4 text-center shadow-sm">
         <p className="text-[11px] uppercase tracking-widest text-[#b8a892]">本局得分</p>
         <p className="mt-1 text-4xl font-black tabular-nums text-[#3f3a35]">{state.score.toLocaleString()}</p>
         <p className="mt-1 text-xs text-[#b8a892]">
@@ -161,7 +161,7 @@ export function ResultOverlay({
 
       {/* 救援结果：这是本局最该被看见的事 */}
       {state.rescues.length > 0 && (
-        <div className="mt-3 rounded-xl bg-white/92 px-4 shadow-sm">
+        <div className="mt-3 rounded-xl bg-white/70 backdrop-blur-[1px] px-4 shadow-sm">
           <div className="py-2.5">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-xs text-[#a89e93]">救援结果</span>
@@ -202,7 +202,7 @@ export function ResultOverlay({
       )}
 
       {/* 明细 */}
-      <div className="mt-3 rounded-xl bg-white/92 px-4 shadow-sm">
+      <div className="mt-3 rounded-xl bg-white/70 backdrop-blur-[1px] px-4 shadow-sm">
         <Row label="清理总数" value={`${summary.totalCleared} 个`} />
         <Row label="最高连锁" value={`${summary.maxChain} 连`} />
         <Row label="收网行动" value={`${summary.sweepUsed} 次`} />
@@ -235,7 +235,7 @@ export function ResultOverlay({
       </div>
 
       {/* 人设 */}
-      <div className="mt-3 flex items-center gap-3 rounded-xl bg-white/92 px-4 py-3 shadow-sm">
+      <div className="mt-3 flex items-center gap-3 rounded-xl bg-white/70 backdrop-blur-[1px] px-4 py-3 shadow-sm">
         <AvatarFigure avatar={avatar} size={56} className="shrink-0" />
         <div className="min-w-0">
           <p className="text-[11px] uppercase tracking-widest text-[#b8a892]">你的虚构角色</p>

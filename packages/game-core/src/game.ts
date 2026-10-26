@@ -13,6 +13,7 @@ import { createRng, seedFromDate, seedFromTimestamp, type Rng } from './rng.ts';
 import {
   applyGravity,
   findHint,
+  findMatchGroups,
   findMatches,
   getCell,
   groupByType,
@@ -178,6 +179,7 @@ export function createGame(levelId: number, seed?: number, mode: GameMode = 'nor
     pendingQuiz: null,
     quizzesTaken: 0,
     crimeBook: {},
+    matchStats: {},
     rescuedCount: 0,
     lostCount: 0,
     rescuePenalty: 0,
@@ -570,6 +572,7 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
   let maxChain = state.maxChain;
   const events: ComboEvent[] = [];
   const clearedCount = { ...state.clearedCount };
+  const matchStats: Record<string, number> = { ...state.matchStats };
   let totalCleared = 0;
   let rescueState = state;
   let hadMatch = false;
@@ -596,6 +599,18 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
      * 这是给消除加「机会成本」的核心机制：
      * 以前消掉同类集群只有好处，现在从集群中间下手会留下锅。
      */
+    // 记录连击：这一波里每组多长（用于「3 连 N 次」类目标）
+    const groups = findMatchGroups(board);
+    for (const g of groups) {
+      const key = `${g.type}:${g.length}`;
+      matchStats[key] = (matchStats[key] ?? 0) + 1;
+      // 「≥N 连」的累计：4 连同时算作 3 连、4 连，5 连算 3/4/5
+      for (let n = 3; n <= g.length; n += 1) {
+        const keyAtLeast = `${g.type}:atleast${n}`;
+        matchStats[keyAtLeast] = (matchStats[keyAtLeast] ?? 0) + 1;
+      }
+    }
+
     const potTargets = findPotTargets(board, matches);
 
     const outcome = clearMatches(board, matches, chain, move, state.modeConfig.chainCap);
@@ -1007,14 +1022,16 @@ export function answerQuiz(
  * 'any' 类型的目标看的是「清理总数」，不是某一种类型。
  */
 export function goalsMet(state: GameState): boolean {
-  return state.level.goals.every((goal) => {
-    if (goal.type === 'any') return state.totalCleared >= goal.count;
-    return (state.clearedCount[goal.type] ?? 0) >= goal.count;
-  });
+  return state.level.goals.every((goal) => goalCurrent(state, goal) >= goal.count);
 }
 
 /** 某个目标当前完成了多少 */
 export function goalCurrent(state: GameState, goal: GameState['level']['goals'][number]): number {
+  // 连击模式：数「完成了几次 size 连」
+  if (goal.size && goal.size >= 3) {
+    const key = `${goal.type}:atleast${goal.size}`;
+    return Math.min(goal.count, state.matchStats?.[key] ?? 0);
+  }
   if (goal.type === 'any') return Math.min(goal.count, state.totalCleared);
   return Math.min(goal.count, state.clearedCount[goal.type] ?? 0);
 }
@@ -1126,6 +1143,7 @@ export function triggerSweep(
   }
 
   const clearedCount = { ...state.clearedCount };
+  const matchStats: Record<string, number> = { ...state.matchStats };
   for (const [t, count] of Object.entries(outcome.counts)) {
     const key = t as VillainType;
     clearedCount[key] = (clearedCount[key] ?? 0) + (count ?? 0);
