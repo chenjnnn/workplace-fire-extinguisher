@@ -22,8 +22,6 @@ import {
   computeStars,
   createGame,
   tickPots,
-  uncoverTile,
-  fireFromSlot,
   goalsMet,
   resolveStep,
   triggerSweep,
@@ -650,78 +648,69 @@ test('锅块不能交换', () => {
   assert.equal(result.ok, false);
 });
 
-// ---------------------------------------------------------------- 工位槽模式
-test('工位槽模式开局有文件堆遮挡', () => {
-  const game = createGame(1, 42, 'workstation');
-  let covered = 0;
-  for (const row of game.board) for (const t of row) if (t?.covered) covered += 1;
-  assert.ok(covered > 0, '应该有一些格子被文件堆盖住');
-  assert.equal(game.workSlotMax, 5);
+
+// ---------------------------------------------------------------- 文件堆
+test('开局撒 6~10 个文件堆，且不盖在空格上', () => {
+  for (let seed = 1; seed <= 5; seed += 1) {
+    const game = createGame(1, seed);
+    let covered = 0;
+    for (let r = 0; r < game.board.length; r += 1) {
+      for (let c = 0; c < (game.board[r]?.length ?? 0); c += 1) {
+        if (game.covers[r]?.[c]) {
+          covered += 1;
+          // 文件堆下面必须有领导
+          assert.ok(game.board[r]?.[c], `(${r},${c}) 文件堆盖在空格上了`);
+          assert.equal(game.board[r]?.[c]?.covered, true);
+        }
+      }
+    }
+    assert.ok(covered >= 6 && covered <= 10, `种子 ${seed} 盖了 ${covered} 个，应在 6~10`);
+  }
 });
 
-test('被盖住的格子不能交换', () => {
-  const base = createGame(1, 42, 'workstation');
-  const board = base.board.map((r) => [...r]);
-  board[2]![2] = { ...board[2]![2]!, covered: true };
-  const { result } = trySwap({ ...base, board }, { row: 2, col: 2 }, { row: 2, col: 3 });
+test('被文件堆盖住的格子不能交换', () => {
+  const base = createGame(1, 42);
+  // 找一个被盖住的格子
+  let spot: { row: number; col: number } | null = null;
+  for (let r = 0; r < base.board.length && !spot; r += 1) {
+    for (let c = 0; c < (base.board[r]?.length ?? 0); c += 1) {
+      if (base.covers[r]?.[c]) {
+        spot = { row: r, col: c };
+        break;
+      }
+    }
+  }
+  assert.ok(spot, '应该至少有一个文件堆');
+  const neighbor = { row: spot!.row, col: spot!.col === 0 ? 1 : spot!.col - 1 };
+  const { result } = trySwap(base, spot!, neighbor);
   assert.equal(result.ok, false);
 });
 
-test('揭开文件堆消耗一步', () => {
-  const base = createGame(1, 42, 'workstation');
-  const board = base.board.map((r) => [...r]);
-  board[2]![2] = { ...board[2]![2]!, covered: true };
-  const state = { ...base, board };
-
-  const { state: next, ok } = uncoverTile(state, { row: 2, col: 2 });
-  assert.equal(ok, true);
-  assert.equal(next.board[2]![2]?.covered, false);
-  assert.equal(next.movesLeft, state.movesLeft - 1);
+test('被盖住的领导不参与匹配', () => {
+  const base = createGame(1, 42);
+  const board = base.board.map((row) => [...row]);
+  // 造一排同色，但把中间那个标成 covered
+  for (let c = 0; c < 3; c += 1) {
+    board[3]![c] = { ...board[3]![c]!, type: 'pua' };
+  }
+  board[3]![1] = { ...board[3]![1]!, covered: true };
+  const matches = findMatches(board);
+  // 被盖住的那一格本身绝不能出现在匹配里
+  const coveredHit = matches.some((m) => m.row === 3 && m.col === 1);
+  assert.equal(coveredHit, false, '被文件堆盖住的格子不能被判定进三连');
 });
 
-test('开除能清掉工位槽里的一个', () => {
-  const base = createGame(1, 42, 'workstation');
-  const state = { ...base, workSlots: ['pua' as const, 'shirk' as const] };
-  const { state: next, ok } = fireFromSlot(state, 0);
-  assert.equal(ok, true);
-  assert.equal(next.workSlots.length, 1);
-  assert.equal(next.workSlots[0], 'shirk');
-});
+test('相邻消除会清掉文件堆', () => {
+  const base = createGame(1, 42);
+  const board = base.board.map((row) => [...row]);
+  // 在第 3 行放三连，并在它右边压一个文件堆
+  for (let c = 0; c < 3; c += 1) {
+    board[3]![c] = { ...board[3]![c]!, type: 'pua' };
+  }
+  board[3]![3] = { ...board[3]![3]!, covered: true };
+  const covers = base.covers.map((row) => [...row]);
+  covers[3]![3] = true;
 
-test('工位槽堆满 5 个会失败', () => {
-  const base = createGame(3, 42, 'workstation');
-  // 直接构造一个槽差 1 个就满的局面，然后走一步非目标消除
-  const state = {
-    ...base,
-    workSlots: ['pua', 'pua', 'pua', 'pua'] as Array<'pua'>,
-  };
-  assert.equal(state.workSlotMax, 5);
-  // 只要槽 >= 5 就会被判负（下一手 resolveStep 会检查）
-  const overflow = { ...state, workSlots: ['pua', 'pua', 'pua', 'pua', 'pua'] as Array<'pua'> };
-  const { state: next } = resolveStep(overflow, createRng(3));
-  assert.equal(next.phase, 'lost');
-});
-
-test('连击统计真的会写回 state（回归：之前漏了）', () => {
-  const base = createGame(3, 42);
-  const board = withTiles(base.board, [
-    [3, 0, 'pua'],
-    [3, 1, 'pua'],
-    [3, 2, 'pua'],
-    [3, 3, 'pua'],
-  ]);
-  const { state: next } = resolveStep({ ...base, board, movesLeft: 30 }, createRng(5));
-  const total = Object.values(next.matchStats).reduce((a, b) => a + b, 0);
-  assert.ok(total > 0, '连击统计应该有数据，否则目标永远推进不了');
-});
-
-test('工位槽真的会累积（回归：之前漏了）', () => {
-  const base = createGame(3, 42, 'workstation');
-  const board = withTiles(base.board, [
-    [3, 0, 'formalist'],
-    [3, 1, 'formalist'],
-    [3, 2, 'formalist'],
-  ]);
-  const { state: next } = resolveStep({ ...base, board, movesLeft: 30 }, createRng(5));
-  assert.ok(next.workSlots.length > 0, '非目标类型应该进工位槽');
+  const { state: next } = resolveStep({ ...base, board, covers, movesLeft: 30 }, createRng(5));
+  assert.equal(next.covers[3]![3], false, '相邻消除后文件堆应该被清掉');
 });

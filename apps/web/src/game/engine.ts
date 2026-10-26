@@ -14,8 +14,6 @@ import {
   comboLabel,
   computeStars,
   createDailyGame,
-  uncoverTile,
-  fireFromSlot,
   createGame,
   createRng,
   findHint,
@@ -65,10 +63,6 @@ export interface HudSnapshot {
   stars: number;
   seed: number;
   canSweep: boolean;
-  /** 工位槽（工位槽模式）：里面堆着的非目标领导 */
-  workSlots: VillainType[];
-  /** 工位槽上限（0 = 不启用） */
-  workSlotMax: number;
   mode: GameMode;
   modeName: string;
   rescues: Array<{
@@ -108,6 +102,8 @@ export interface EngineOptions {
   onHud: (snapshot: HudSnapshot) => void;
   onCombo?: (event: ComboEvent) => void;
   onFinish?: (state: GameState) => void;
+  /** 简单提示（比如点到文件堆） */
+  onToast?: (message: string) => void;
 }
 
 // ---------------------------------------------------------------- 内部类型
@@ -374,28 +370,6 @@ export class GameEngine {
   }
 
   /** 玩家点「收网行动」 */
-  /** 开除工位槽里的一个领导（1 步都不花，但只能清槽，不加进度） */
-  fireFromSlot(index: number): boolean {
-    if (this.busy || this.state.phase !== 'idle') return false;
-    const result = fireFromSlot(this.state, index);
-    if (!result.ok) return false;
-    this.state = result.state;
-    this.emitHud();
-    return true;
-  }
-
-  /** 翻开一格文件堆（工位槽模式） */
-  uncover(coord: Coord): boolean {
-    if (this.busy || this.state.phase !== 'idle') return false;
-    const result = uncoverTile(this.state, coord);
-    if (!result.ok) return false;
-
-    this.state = result.state;
-    this.selected = null;
-    this.emitHud();
-    return true;
-  }
-
   sweep(): boolean {
     if (this.busy || this.state.phase !== 'idle') return false;
     if (this.state.rage < this.state.rageMax) return false;
@@ -581,10 +555,10 @@ export class GameEngine {
       const cell = this.pointToCell(p.x, p.y);
       if (!cell) return;
 
-      // 点了被文件堆盖住的格子 → 翻开（花 1 步）
+      // 点了被文件堆盖住的格子 → 提示「先清文件」
       const tappedTile = this.state.board[cell.row]?.[cell.col];
-      if (tappedTile?.covered) {
-        this.uncover(cell);
+      if (this.state.covers[cell.row]?.[cell.col] || tappedTile?.covered) {
+        this.options.onToast?.('先清文件！相邻消除或者用道具才能清掉');
         return;
       }
 
@@ -1541,8 +1515,6 @@ export class GameEngine {
       stars: computeStars(s),
       seed: s.seed,
       canSweep: s.rage >= s.rageMax && s.phase === 'idle' && s.sweepUsed < s.modeConfig.sweepLimit,
-      workSlots: s.workSlots,
-      workSlotMax: s.workSlotMax,
       mode: s.mode,
       modeName: s.modeConfig.name,
       sweepUsed: s.sweepUsed,
@@ -1607,8 +1579,6 @@ export class GameEngine {
     return {
       board,
       hint: findHint(this.state.board),
-      workSlots: this.state.workSlots,
-      workSlotMax: this.state.workSlotMax,
       movesLeft: this.state.movesLeft,
       score: this.state.score,
       phase: this.state.phase,

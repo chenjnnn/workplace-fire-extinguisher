@@ -30,7 +30,6 @@ import { applyLevelResult, loadSave, persistSave } from '@/lib/save';
 import { ResultOverlay } from '@/components/result';
 import { AvatarFigure } from '@/components/art';
 import { PrisonVan } from '@/components/prison-van';
-import { WorkSlots } from '@/components/work-slots';
 import { RescueBar } from '@/components/rescue-bar';
 import { SceneIntro } from '@/components/scene-intro';
 import { Tutorial } from '@/components/tutorial';
@@ -154,6 +153,7 @@ export function PlayClient({
       daily,
       avatar: save.avatar,
       onHud: (snapshot) => setHud(snapshot),
+      onToast: (msg) => setToast(msg),
       onFinish: (state) => {
         const nextSave = applyLevelResult(
           loadSave(),
@@ -488,12 +488,6 @@ export function PlayClient({
         onSweep={sweep}
       />
 
-      {/* 工位槽（只有工位槽模式显示） */}
-      <WorkSlots
-        slots={hud?.workSlots ?? []}
-        max={hud?.workSlotMax ?? 0}
-        onFire={(i) => engineRef.current?.fireFromSlot(i)}
-      />
 
       {/* 棋盘 */}
       <section className="relative mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">

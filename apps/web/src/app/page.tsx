@@ -120,14 +120,6 @@ export default function HomePage() {
             </Link>
 
             <Link
-              href={`/play/?level=${currentLevelId}&mode=workstation`}
-              className="flex flex-col gap-1 rounded-2xl bg-[#f0b429] px-3.5 py-3 text-[#4a3a12] transition active:scale-[0.98]"
-            >
-              <span className="text-[15px] font-black leading-tight">工位槽</span>
-              <span className="text-[10px] leading-snug text-[#4a3a12]/70">文件堆遮挡 · 槽满就输</span>
-            </Link>
-
-            <Link
               href="/drop/"
               className="flex flex-col gap-1 rounded-2xl bg-white px-3.5 py-3 text-[#5a5148] transition active:scale-[0.98]"
             >

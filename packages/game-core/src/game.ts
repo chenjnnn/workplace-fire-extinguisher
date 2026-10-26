@@ -166,26 +166,18 @@ export function createGame(levelId: number, seed?: number, mode: GameMode = 'nor
   }));
 
   /**
-   * 工位槽模式：随机用「文件堆」盖住一部分格子。
+   * 开局撒 6~10 个「文件堆」。
    *
-   * 盖住的格子不能交换，要先点掉（花 1 步）。这是为了加「侦查成本」——
-   * 全可见时玩家一眼看穿全局，没有判断；遮一部分才需要决定「值不值得翻开」。
+   * 规则（用户定的）：
+   *   · 被盖住的领导不能交换、不能被消除、不计入囚车
+   *   · 文件堆不下落，是固定障碍；上方块落到它上方就停
+   *   · 只能靠「相邻消除」或道具清掉
+   *   · 绝不盖在空格上（下面必须有领导）
    */
-  if (mode === 'workstation') {
-    const coverCount = Math.floor(board.length * (board[0]?.length ?? 0) * 0.22);
-    const cells: Array<[number, number]> = [];
-    for (let r = 0; r < board.length; r += 1) {
-      for (let c = 0; c < (board[r]?.length ?? 0); c += 1) cells.push([r, c]);
-    }
-    // 洗牌后取前 N 个
-    for (let i = cells.length - 1; i > 0; i -= 1) {
-      const j = rng.int(i + 1);
-      [cells[i], cells[j]] = [cells[j]!, cells[i]!];
-    }
-    for (const [r, c] of cells.slice(0, coverCount)) {
-      const t = board[r]?.[c];
-      if (t) board[r]![c] = { ...t, covered: true };
-    }
+  const coverSpots = pickCoverSpots(board, rng);
+  for (const { row, col } of coverSpots) {
+    const t = board[row]?.[col];
+    if (t) board[row]![col] = { ...t, covered: true };
   }
 
   const state: GameState = {
@@ -203,8 +195,12 @@ export function createGame(levelId: number, seed?: number, mode: GameMode = 'nor
     quizzesTaken: 0,
     crimeBook: {},
     matchStats: {},
-    workSlots: [],
-    workSlotMax: mode === 'workstation' ? 5 : 0,
+    // 文件堆：格子级障碍（pickCoverSpots 已经挑好位置）
+    covers: Array.from({ length: level.rows }, (_, r) =>
+      Array.from({ length: level.cols }, (_, c) =>
+        coverSpots.some((spot) => spot.row === r && spot.col === c),
+      ),
+    ),
     rescuedCount: 0,
     lostCount: 0,
     rescuePenalty: 0,
@@ -543,31 +539,45 @@ function removeCleared(board: Board, cleared: Coord[]): Board {
  *
  * 关键：新格子的 viewRow 是负数，渲染层据此播「从上掉下来」的动画。
  */
-function refillBoard(board: Board, level: LevelConfig, rng: Rng): Board {
+function refillBoard(board: Board, level: LevelConfig, rng: Rng, covers?: boolean[][]): Board {
   const next = board.map((row) => [...row]);
   const rows = next.length;
   const cols = next[0]?.length ?? 0;
 
   for (let c = 0; c < cols; c += 1) {
-    // 该列有几个空位
-    let holes = 0;
-    for (let r = 0; r < rows; r += 1) {
-      if (!next[r]![c]) holes += 1;
+    // 统计每一段（被文件堆切开）的空位，只在这一段的顶部上方生成新块
+    let segStart = 0;
+    const segments: Array<[number, number]> = [];
+    for (let r = 0; r <= rows; r += 1) {
+      const isCover = r < rows && covers?.[r]?.[c];
+      if (r === rows || isCover) {
+        segments.push([segStart, r - 1]);
+        segStart = r + 1;
+      }
     }
-    if (holes === 0) continue;
 
-    // 从上往下找到第一个空位之前的连续非空段会自然下落，
-    // 这里只需要在顶部生成 holes 个新格子
-    for (let i = 0; i < holes; i += 1) {
-      const type = rng.pick(level.types);
-      const tile = makeTile(type, -1 - i, c, false, rng.int(3));
-      tile.state = 'spawning';
-      tile.dropFromRow = -1 - i;
-      // 找到该列最上面的空位放进去（applyGravity 之后调用，顶部一定是空的）
-      for (let r = 0; r < rows; r += 1) {
-        if (!next[r]![c]) {
-          next[r]![c] = tile;
-          break;
+    for (const [idx, seg] of segments.entries()) {
+      const [top, bottom] = seg;
+      if (bottom < top) continue;
+      let holes = 0;
+      for (let r = top; r <= bottom; r += 1) {
+        if (!next[r]![c]) holes += 1;
+      }
+      if (holes === 0) continue;
+
+      for (let i = 0; i < holes; i += 1) {
+        const type = rng.pick(level.types);
+        // 只有最上面那一段的块是从棋盘上方掉进来的；
+        // 文件堆下方的段直接在原地生成（它们被文件堆压着，不该有掉落动画）
+        const fromAbove = idx === 0;
+        const tile = makeTile(type, fromAbove ? top - 1 - i : top + i, c, false, rng.int(3));
+        tile.state = fromAbove ? 'spawning' : 'idle';
+        if (fromAbove) tile.dropFromRow = top - 1 - i;
+        for (let r = top; r <= bottom; r += 1) {
+          if (!next[r]![c]) {
+            next[r]![c] = tile;
+            break;
+          }
         }
       }
     }
@@ -602,7 +612,8 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
   const events: ComboEvent[] = [];
   const clearedCount = { ...state.clearedCount };
   const matchStats: Record<string, number> = { ...state.matchStats };
-  const workSlots: VillainType[] = [...state.workSlots];
+  // 文件堆在这一手里可能被相邻消除清掉，用副本边走边改
+  const coversForBoard: boolean[][] = state.covers.map((row) => [...row]);
   let totalCleared = 0;
   let rescueState = state;
   let hadMatch = false;
@@ -641,6 +652,27 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
       }
     }
 
+    /**
+     * 文件堆清除：被消除的格子，上下左右如果压着文件堆，那一叠文件就被「顺手清掉」。
+     * 这是文件堆唯一的自然清除方式（另一种是道具命中）。
+     */
+    for (const m of matches) {
+      for (const [dr, dc] of [
+        [-1, 0],
+        [1, 0],
+        [0, -1],
+        [0, 1],
+      ] as const) {
+        const cr = m.row + dr;
+        const cc = m.col + dc;
+        if (coversForBoard[cr]?.[cc]) {
+          coversForBoard[cr]![cc] = false;
+          const t = getCell(board, cr, cc);
+          if (t) board[cr]![cc] = { ...t, covered: false };
+        }
+      }
+    }
+
     const potTargets = findPotTargets(board, matches);
 
     const outcome = clearMatches(board, matches, chain, move, state.modeConfig.chainCap);
@@ -662,21 +694,6 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     // 消除结果反馈到救援进度
     rescueState = feedRescue(rescueState, outcome.counts);
 
-    /**
-     * 工位槽模式：消掉的「非目标」领导没被处理掉，只是堆到你工位上。
-     * 堆满 workSlotMax（5 个）→ 领导集体反扑 → 失败。
-     * 目标类型直接关押进囚车，不进槽。
-     */
-    if (state.mode === 'workstation' && state.workSlotMax > 0) {
-      const goalTypes = new Set(state.level.goals.map((g) => g.type));
-      for (const [type, count] of Object.entries(outcome.counts)) {
-        const key = type as VillainType;
-        if (goalTypes.has(key) || goalTypes.has('any')) continue;
-        for (let n = 0; n < (count ?? 0); n += 1) {
-          if (workSlots.length < state.workSlotMax + 1) workSlots.push(key);
-        }
-      }
-    }
 
     // 移除 → 落下锅 → 重力 → 填充
     board = removeCleared(board, outcome.cleared);
@@ -691,9 +708,9 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
       }
     }
 
-    const gravity = applyGravity(board);
+    const gravity = applyGravity(board, coversForBoard);
     board = gravity.board;
-    board = refillBoard(board, state.level, rng);
+    board = refillBoard(board, state.level, rng, coversForBoard);
 
     // 把「起点」写回掉落后的格子（同一批对象，按引用对上）
     for (let r = 0; r < board.length; r += 1) {
@@ -734,9 +751,9 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     events,
     totalCleared: state.totalCleared + totalCleared,
     clearedCount,
-    // 这两个之前漏了写回 —— 连击目标和工位槽都不会推进
+    // 这个之前漏了写回 —— 连击目标不会推进
     matchStats,
-    workSlots,
+    covers: coversForBoard,
     // 救援进度与失败计数从中间态合并回来
     rescues: rescueState.rescues,
     rescuedCount: rescueState.rescuedCount,
@@ -749,46 +766,13 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
 
   // 判定胜负
   const won = goalsMet(next);
-  // 工位槽堆满 = 领导集体反扑，直接失败（优先于「步数用完」）
-  const slotOverflow =
-    next.mode === 'workstation' && next.workSlotMax > 0 && next.workSlots.length >= next.workSlotMax;
-
   if (won) {
     next = { ...next, phase: 'won' };
-  } else if (slotOverflow) {
-    next = { ...next, phase: 'lost' };
   } else if (next.movesLeft <= 0) {
     next = { ...next, phase: 'lost' };
   }
 
   return { state: next, hadMatch, reshuffled };
-}
-
-/**
- * 揭开一格文件堆（消耗 1 步）。
- */
-export function uncoverTile(state: GameState, coord: Coord): { state: GameState; ok: boolean } {
-  if (state.phase !== 'idle') return { state, ok: false };
-  const tile = getCell(state.board, coord.row, coord.col);
-  if (!tile?.covered) return { state, ok: false };
-  if (state.movesLeft <= 0) return { state, ok: false };
-
-  const board = state.board.map((row) => [...row]);
-  board[coord.row]![coord.col] = { ...tile, covered: false };
-
-  return {
-    state: { ...state, board, movesLeft: state.movesLeft - 1 },
-    ok: true,
-  };
-}
-
-/** 用「开除」清掉工位槽里的一个领导 */
-export function fireFromSlot(state: GameState, index: number): { state: GameState; ok: boolean } {
-  if (state.phase !== 'idle') return { state, ok: false };
-  if (index < 0 || index >= state.workSlots.length) return { state, ok: false };
-  const slots = [...state.workSlots];
-  slots.splice(index, 1);
-  return { state: { ...state, workSlots: slots }, ok: true };
 }
 
 // ---------------------------------------------------------------- 问答
@@ -934,6 +918,31 @@ export function triggerQuiz(
 ): { state: GameState; usedIds: string[] } {
   const { quiz, usedIds: nextUsed } = drawQuiz(seed, usedIds);
   return { state: { ...state, pendingQuiz: quiz }, usedIds: nextUsed };
+}
+
+/**
+ * 挑出要盖文件堆的格子：6~10 个，且每格下面必须有领导。
+ */
+function pickCoverSpots(
+  board: Board,
+  rng: Rng,
+): Array<{ row: number; col: number }> {
+  const cells: Array<{ row: number; col: number }> = [];
+  for (let r = 0; r < board.length; r += 1) {
+    for (let c = 0; c < (board[r]?.length ?? 0); c += 1) {
+      // 只考虑有领导的格子 —— 不能盖在空格上
+      if (board[r]?.[c]) cells.push({ row: r, col: c });
+    }
+  }
+
+  // Fisher-Yates 洗牌
+  for (let i = cells.length - 1; i > 0; i -= 1) {
+    const j = rng.int(i + 1);
+    [cells[i], cells[j]] = [cells[j]!, cells[i]!];
+  }
+
+  const count = 6 + Math.floor(rng.next() * 5); // 6~10
+  return cells.slice(0, Math.min(count, cells.length));
 }
 
 /**
@@ -1204,9 +1213,9 @@ export function triggerSweep(
     }
   }
 
-  const gravity = applyGravity(board);
+  const gravity = applyGravity(board, state.covers);
   board = gravity.board;
-  board = refillBoard(board, state.level, rng);
+  board = refillBoard(board, state.level, rng, state.covers);
 
   for (let r = 0; r < board.length; r += 1) {
     for (let c = 0; c < (board[r]?.length ?? 0); c += 1) {
@@ -1226,7 +1235,8 @@ export function triggerSweep(
 
   const clearedCount = { ...state.clearedCount };
   const matchStats: Record<string, number> = { ...state.matchStats };
-  const workSlots: VillainType[] = [...state.workSlots];
+  // 文件堆在这一手里可能被相邻消除清掉，用副本边走边改
+  const coversForBoard: boolean[][] = state.covers.map((row) => [...row]);
   for (const [t, count] of Object.entries(outcome.counts)) {
     const key = t as VillainType;
     clearedCount[key] = (clearedCount[key] ?? 0) + (count ?? 0);

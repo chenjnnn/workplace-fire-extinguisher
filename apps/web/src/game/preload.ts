@@ -521,17 +521,36 @@ export function drawTileSprite(
     ctx.stroke();
   }
 
-  // ---- 毒雾（甩锅侠甩出的锅）
+  /**
+   * 毒雾（甩锅侠甩出的锅）。
+   *
+   * 这里**刻意不用绿色**：绿色已经是「甩锅侠」这个角色的身份色，
+   * 再拿绿色盖别的角色，棋盘上就会出现两种绿，玩家分不清。
+   * 改用深灰 + 斜纹，和任何身份色都不撞。
+   */
   if (poisoned) {
     ctx.save();
     circle(ctx, cx, cy, r);
     ctx.clip();
-    ctx.fillStyle = 'rgba(101, 163, 13, 0.4)';
+
+    // 深灰罩
+    ctx.fillStyle = 'rgba(38, 38, 44, 0.42)';
     ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-    ctx.fillStyle = 'rgba(63, 98, 18, 0.6)';
-    circle(ctx, cx, cy + r * 0.15, r * 0.4);
+
+    // 斜纹（"脏污"的感觉）
+    ctx.strokeStyle = 'rgba(20, 20, 24, 0.35)';
+    ctx.lineWidth = Math.max(1.5, r * 0.12);
+    for (let i = -2; i <= 2; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(cx - r + i * r * 0.5, cy - r);
+      ctx.lineTo(cx + i * r * 0.5, cy + r);
+      ctx.stroke();
+    }
+
+    // 中央小污点
+    ctx.fillStyle = 'rgba(25, 25, 30, 0.55)';
+    circle(ctx, cx, cy + r * 0.15, r * 0.32);
     ctx.fill();
-    ctx.fillRect(cx - r * 0.5, cy - r * 0.35, r * 0.22, r * 0.1);
     ctx.restore();
   }
 
