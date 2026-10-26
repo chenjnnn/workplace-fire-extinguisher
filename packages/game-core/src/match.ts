@@ -132,9 +132,22 @@ export function isClearable(tile: Tile): boolean {
  * 7×7 棋盘最多 84 次尝试，每次 O(n²)，性能完全够。
  * 优化方向（以后）：记录每个格子的潜在匹配，而不是全盘重算。
  */
+/**
+ * 提示：找一个「值得做」的交换。
+ *
+ * 之前是行优先遍历，第一个能找到匹配的就返回 ——
+ * 结果提示永远在第一行，而且往往只能消三个，玩家会觉得「这提示没用」。
+ *
+ * 现在改成：收集所有可行解，按「能消掉多少个」排序，优先推荐消得多的。
+ * 平手时选更靠棋盘中心的，避免视线总被拉到最上面。
+ */
 export function findHint(board: Board): { a: Coord; b: Coord } | null {
   const rows = board.length;
   const cols = board[0]?.length ?? 0;
+  const centerR = (rows - 1) / 2;
+  const centerC = (cols - 1) / 2;
+
+  let best: { a: Coord; b: Coord; score: number; dist: number } | null = null;
 
   for (let r = 0; r < rows; r += 1) {
     for (let c = 0; c < cols; c += 1) {
@@ -151,11 +164,25 @@ export function findHint(board: Board): { a: Coord; b: Coord } | null {
         if (!inBounds(board, other.row, other.col)) continue;
         const swapped = swappedBoard(board, here, other);
         if (!swapped) continue;
-        if (findMatches(swapped).length > 0) return { a: here, b: other };
+
+        const matched = findMatches(swapped);
+        if (matched.length === 0) continue;
+
+        const dist =
+          Math.abs((r + other.row) / 2 - centerR) + Math.abs((c + other.col) / 2 - centerC);
+
+        if (
+          !best ||
+          matched.length > best.score ||
+          (matched.length === best.score && dist < best.dist)
+        ) {
+          best = { a: here, b: other, score: matched.length, dist };
+        }
       }
     }
   }
-  return null;
+
+  return best ? { a: best.a, b: best.b } : null;
 }
 
 /**

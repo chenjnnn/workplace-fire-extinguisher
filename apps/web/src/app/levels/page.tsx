@@ -33,7 +33,14 @@ interface PlanGroup {
 const GROUPS: PlanGroup[] = [
   { id: 'today', title: '今日计划', range: '关卡 1-5', levels: [1, 2, 3, 4, 5], face: 'pua', color: '#ff6b4a' },
   { id: 'week', title: '周计划', range: '关卡 6-10', levels: [6, 7, 8, 9, 10], face: 'overtime', color: '#f59e0b' },
-  { id: 'month', title: '月计划', range: '即将开启', levels: [], face: null, color: '#a89e93', locked: true },
+  {
+    id: 'month',
+    title: '月计划',
+    range: '关卡 11-15',
+    levels: [11, 12, 13, 14, 15],
+    face: 'formalist',
+    color: '#a855f7',
+  },
   { id: 'quarter', title: '季度计划', range: '即将开启', levels: [], face: null, color: '#a89e93', locked: true },
 ];
 

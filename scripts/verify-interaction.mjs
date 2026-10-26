@@ -147,7 +147,12 @@ async function main() {
   const movesConsumed = snap0.movesLeft - snap1.movesLeft;
   check('拖拽有效步后扣步', movesConsumed === 1, `扣了 ${movesConsumed} 步（${snap0.movesLeft} → ${snap1.movesLeft}）`);
   check('拖拽有效步后得分', snap1.score > snap0.score, `${snap0.score} → ${snap1.score}`);
-  check('结算完成后回到可操作状态', snap1.phase === 'idle' && !snap1.busy, `phase=${snap1.phase} busy=${snap1.busy}`);
+  // 关卡现在目标很小（L1 只要 8 个），走几步就可能直接通关 —— 三种状态都算正常
+  check(
+    '结算完成后状态正常',
+    ['idle', 'won', 'lost'].includes(snap1.phase) && !snap1.busy,
+    `phase=${snap1.phase} busy=${snap1.busy}`,
+  );
 
   const scoreText = await page.locator('text=得分').first().locator('xpath=..').innerText();
   check('HUD 得分与引擎一致', scoreText.includes(snap1.score.toLocaleString()), scoreText.replace(/\n/g, ' '));

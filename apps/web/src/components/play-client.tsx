@@ -202,20 +202,6 @@ export function PlayClient({
     return () => clearTimeout(timer);
   }, [toast]);
 
-  /**
-   * 囚车里每个格子放谁的头像。
-   * 用「最近消除过的类型」填充，这样关进去的人和刚才打的人对得上。
-   */
-  const recentTypes = useMemo(() => {
-    const list: VillainType[] = [];
-    if (!hud) return list;
-    // 按关卡类型循环填充，保证颜色不重复
-    for (let i = 0; i < 8; i += 1) {
-      list.push(level.types[i % level.types.length] ?? 'pua');
-    }
-    return list;
-  }, [hud, level.types]);
-
 
   // 结算页内容很长，需要能滚动 —— 解除「禁止滚动」的锁
   useEffect(() => {
@@ -495,10 +481,7 @@ export function PlayClient({
 
       {/* 囚车：把「还差几个」变成「已经关进去几个」 */}
       <PrisonVan
-        current={hud?.overall.current ?? 0}
-        total={hud?.overall.total ?? 0}
-        recentTypes={recentTypes}
-        fallbackType={level.types[0] ?? 'pua'}
+        goals={hud?.goals ?? []}
         canSweep={hud?.canSweep ?? false}
         sweepLeft={Math.max(0, (hud?.sweepLimit ?? 0) - (hud?.sweepUsed ?? 0))}
         onSweep={sweep}
