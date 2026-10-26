@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.next/
+out/
+.npm-cache/
+*.log
+.DS_Store
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Playwright 浏览器（几十 MB，不进仓库）
+.pw-browsers/
+
+# 构建产物
+.next-prod/

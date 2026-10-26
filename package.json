@@ -1,0 +1,28 @@
+{
+  "name": "villain-clear",
+  "version": "0.1.0",
+  "private": true,
+  "description": "坏蛋消消乐 — 消除类小游戏（网页版，后续小程序）",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "predev": "npm run build -w @vc/core",
+    "dev": "concurrently -n web -c magenta \"npm run dev -w @vc/web\"",
+    "build": "npm run build -w @vc/core && npm run build -w @vc/web",
+    "prestart": "npm run build -w @vc/core",
+    "start": "npm run start -w @vc/web",
+    "test": "npm run test -w @vc/core",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "setup": "npm install && npm run build -w @vc/core"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "playwright": "^1.64.1",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

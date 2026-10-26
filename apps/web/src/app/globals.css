@@ -1,0 +1,211 @@
+@import 'tailwindcss';
+@import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@800;900&display=swap');
+
+@theme {
+  --color-ink-900: #07070c;
+  --color-ink-800: #0d0d16;
+  --color-ink-700: #14141d;
+  --color-ink-600: #1b1b28;
+  --color-ink-500: #22222f;
+  --color-ink-400: #2e2e3f;
+  --color-neon-cyan: #38e1ff;
+  --color-neon-lime: #a6ff3d;
+  --color-neon-gold: #ffc93c;
+  --color-neon-red: #ff5c7a;
+  --color-neon-purple: #c46bff;
+  /* 正文：干净柔和的黑体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  /**
+   * 标题：圆润粗圆体
+   *
+   * 按平台优先级列出来，都是系统自带的圆体，不加载任何网络字体：
+   *   Yuanti SC       macOS / iOS 的「圆体-简」，真正的圆体
+   *   YouYuan         Windows 的「幼圆」
+   *   Hiragino Maru   日文圆体（汉字和简体通用）
+   *   PingFang SC     兜底
+   *
+   * 之前用站酷快乐体，手写装饰感太重，看起来像 AI 生成的海报。
+   * 休闲游戏要的是「粗、圆、无装饰」，所以换成系统圆体 + 重字重。
+   */
+  /**
+   * 顺序很重要：
+   *   Yuanti SC（macOS「圆体-简」）放第一位 —— 这是唯一能覆盖全部简体字的真圆体
+   *   M PLUS Rounded 1c 只兜底英文和数字（它没有简中字形）
+   *   YouYuan 是 Windows 的幼圆
+   */
+  --font-rounded: 'Yuanti SC', 'Yuanti TC', 'M PLUS Rounded 1c', 'YouYuan',
+    'Hiragino Maru Gothic ProN', 'Hiragino Sans GB', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    background-color: #fff8ec;
+    color: #2e2a24;
+    -webkit-font-smoothing: antialiased;
+    font-family: var(--font-sans);
+    overscroll-behavior: none;
+  }
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* 游戏页禁止页面滚动，避免拖拽棋盘时整页跟着动 */
+  body.game-locked {
+    overflow: hidden;
+    touch-action: none;
+  }
+}
+
+@layer components {
+  /* 标题字体：圆润粗圆体，重字重 */
+  .font-display {
+    font-family: var(--font-rounded);
+    font-weight: 900;
+    letter-spacing: 0.02em;
+  }
+
+  /* 数字也走圆体，比默认数字好看 */
+  .font-num {
+    font-family: var(--font-rounded);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .panel {
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, rgba(34, 34, 47, 0.9), rgba(14, 14, 22, 0.9));
+    backdrop-filter: blur(8px);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: 0.85rem;
+    padding: 0.7rem 1.1rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      transform 0.12s,
+      filter 0.15s,
+      background-color 0.15s;
+  }
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, #ff5c7a, #ff8f3c);
+    color: #1a0a10;
+    box-shadow: 0 6px 22px rgba(255, 92, 122, 0.32);
+  }
+  .btn-primary:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+
+  .btn-neon {
+    background: linear-gradient(135deg, #38e1ff, #4a8cff);
+    color: #041018;
+    box-shadow: 0 6px 22px rgba(56, 225, 255, 0.28);
+  }
+  .btn-neon:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+
+  .btn-ghost {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: #e8e8ef;
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.09);
+  }
+
+  .tap-card {
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.035);
+    transition:
+      transform 0.15s,
+      border-color 0.15s,
+      background-color 0.15s;
+  }
+  .tap-card:hover {
+    border-color: rgba(56, 225, 255, 0.5);
+    background: rgba(56, 225, 255, 0.06);
+  }
+
+  .chip {
+    display: inline-flex;
+    cursor: pointer;
+    user-select: none;
+    align-items: center;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    padding: 0.34rem 0.7rem;
+    font-size: 0.8rem;
+    color: #c8c8d6;
+    transition: all 0.15s;
+  }
+  .chip:hover {
+    border-color: rgba(255, 255, 255, 0.32);
+  }
+  .chip-on {
+    border-color: rgba(56, 225, 255, 0.8);
+    background: rgba(56, 225, 255, 0.15);
+    color: #9defff;
+  }
+
+  .glow-text {
+    text-shadow: 0 0 18px currentColor;
+  }
+}
+
+/* 让 canvas 在移动端不出现选中/放大镜 */
+canvas {
+  display: block;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@keyframes floatUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in-up {
+  animation: floatUp 0.35s ease-out both;
+}
+
+@keyframes pulseGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 92, 122, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(255, 92, 122, 0);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 1.6s ease-out infinite;
+}
