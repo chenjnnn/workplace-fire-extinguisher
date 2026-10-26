@@ -165,20 +165,8 @@ export function createGame(levelId: number, seed?: number, mode: GameMode = 'nor
     avatar: makeRescueAvatar(levelId * 10 + idx),
   }));
 
-  /**
-   * 开局撒 6~10 个「文件堆」。
-   *
-   * 规则（用户定的）：
-   *   · 被盖住的领导不能交换、不能被消除、不计入囚车
-   *   · 文件堆不下落，是固定障碍；上方块落到它上方就停
-   *   · 只能靠「相邻消除」或道具清掉
-   *   · 绝不盖在空格上（下面必须有领导）
-   */
-  const coverSpots = pickCoverSpots(board, rng);
-  for (const { row, col } of coverSpots) {
-    const t = board[row]?.[col];
-    if (t) board[row]![col] = { ...t, covered: true };
-  }
+  // 普通模式不撒文件堆（文件堆是独立项目里的机制，这里保持纯净）
+  const coverSpots: Array<{ row: number; col: number }> = [];
 
   const state: GameState = {
     level,

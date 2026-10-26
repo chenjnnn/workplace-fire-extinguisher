@@ -650,42 +650,6 @@ test('锅块不能交换', () => {
 
 
 // ---------------------------------------------------------------- 文件堆
-test('开局撒 6~10 个文件堆，且不盖在空格上', () => {
-  for (let seed = 1; seed <= 5; seed += 1) {
-    const game = createGame(1, seed);
-    let covered = 0;
-    for (let r = 0; r < game.board.length; r += 1) {
-      for (let c = 0; c < (game.board[r]?.length ?? 0); c += 1) {
-        if (game.covers[r]?.[c]) {
-          covered += 1;
-          // 文件堆下面必须有领导
-          assert.ok(game.board[r]?.[c], `(${r},${c}) 文件堆盖在空格上了`);
-          assert.equal(game.board[r]?.[c]?.covered, true);
-        }
-      }
-    }
-    assert.ok(covered >= 6 && covered <= 10, `种子 ${seed} 盖了 ${covered} 个，应在 6~10`);
-  }
-});
-
-test('被文件堆盖住的格子不能交换', () => {
-  const base = createGame(1, 42);
-  // 找一个被盖住的格子
-  let spot: { row: number; col: number } | null = null;
-  for (let r = 0; r < base.board.length && !spot; r += 1) {
-    for (let c = 0; c < (base.board[r]?.length ?? 0); c += 1) {
-      if (base.covers[r]?.[c]) {
-        spot = { row: r, col: c };
-        break;
-      }
-    }
-  }
-  assert.ok(spot, '应该至少有一个文件堆');
-  const neighbor = { row: spot!.row, col: spot!.col === 0 ? 1 : spot!.col - 1 };
-  const { result } = trySwap(base, spot!, neighbor);
-  assert.equal(result.ok, false);
-});
-
 test('被盖住的领导不参与匹配', () => {
   const base = createGame(1, 42);
   const board = base.board.map((row) => [...row]);
