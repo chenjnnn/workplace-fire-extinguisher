@@ -13,6 +13,7 @@ import {
   VILLAINS,
   comboLabel,
   computeStars,
+  createDailyGame,
   createGame,
   createRng,
   findHint,
@@ -85,6 +86,8 @@ export interface HudSnapshot {
 export interface EngineOptions {
   canvas: HTMLCanvasElement;
   levelId: number;
+  /** 每日挑战：同一天用同一个种子，全网同一局 */
+  daily?: boolean;
   seed?: number;
   mode?: GameMode;
   avatar: AvatarConfig | null;
@@ -180,6 +183,8 @@ export class GameEngine {
   /** 已答过的题 id（跨局持久化，保证不重复） */
   /** 是否暂停中 */
   private paused = false;
+  /** 每日挑战模式：重开时也用同一个日期种子 */
+  private daily = false;
   private quizUsedIds: string[] = [];
   /** 答题后的回调，用来把 usedIds 存进 localStorage */
   private onQuizUsed?: (ids: string[]) => void;
@@ -226,7 +231,10 @@ export class GameEngine {
     if (!ctx) throw new Error('浏览器不支持 canvas 2d');
     this.ctx = ctx;
 
-    this.state = createGame(options.levelId, options.seed, options.mode ?? 'normal');
+    this.daily = options.daily ?? false;
+    this.state = this.daily
+      ? createDailyGame(new Date(), options.levelId, options.mode ?? 'normal')
+      : createGame(options.levelId, options.seed, options.mode ?? 'normal');
     this.rng = createRng(this.state.seed);
 
     this.attachResize();
@@ -329,7 +337,9 @@ export class GameEngine {
 
   restart(seed?: number): void {
     const levelId = this.state.level.id;
-    this.state = createGame(levelId, seed, this.state.mode);
+    this.state = this.daily
+      ? createDailyGame(new Date(), levelId, this.state.mode)
+      : createGame(levelId, seed, this.state.mode);
     this.rng = createRng(this.state.seed);
     this.tweens.clear();
     this.particles = [];
@@ -591,6 +601,11 @@ export class GameEngine {
   }
 
   // ------------------------------------------------------------ 交换
+  /** 当前罪状簿（UI 用来持久化） */
+  public getCrimeBook(): Record<string, number> {
+    return { ...this.state.crimeBook } as Record<string, number>;
+  }
+
   /** 暂停：停掉渲染循环（菜单打开时用） */
   public pause(): void {
     if (this.paused) return;
@@ -1420,6 +1435,7 @@ export class GameEngine {
       tile.poisoned,
       tile.hp,
       tile.variant ?? 0,
+      tile.isPot ?? false,
     );
     const size = cell * scale;
 

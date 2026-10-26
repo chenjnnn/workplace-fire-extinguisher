@@ -22,7 +22,15 @@ import {
   sameCoord,
   swappedBoard,
 } from './match.ts';
-import { describeEffect, drawQuiz, getTool, type Quiz } from './quiz.ts';
+import { addCrime, crimeMultiplier } from './crimes.ts';
+import {
+  describeEffect,
+  drawQuiz,
+  getTool,
+  isOptionRight,
+  type Quiz,
+  type QuizContext,
+} from './quiz.ts';
 import type {
   Board,
   Cell,
@@ -169,6 +177,7 @@ export function createGame(levelId: number, seed?: number, mode: GameMode = 'nor
     rescues,
     pendingQuiz: null,
     quizzesTaken: 0,
+    crimeBook: {},
     rescuedCount: 0,
     lostCount: 0,
     rescuePenalty: 0,
@@ -290,6 +299,10 @@ function feedRescue(state: GameState, counts: Partial<Record<VillainType, number
  *   ok=true   → 棋盘已交换，进入 resolving，渲染层去播动画
  */
 export function trySwap(state: GameState, a: Coord, b: Coord): { state: GameState; result: SwapResult } {
+  // 锅块是障碍，不能交换
+  if (getCell(state.board, a.row, a.col)?.isPot || getCell(state.board, b.row, b.col)?.isPot) {
+    return { state, result: { ok: false, reason: 'blocked' } };
+  }
   if (state.phase !== 'idle') {
     return { state, result: { ok: false, reason: 'busy' } };
   }
@@ -562,6 +575,9 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
   let hadMatch = false;
   const move = state.level.moves - state.movesLeft + 1;
 
+  // 锅老化：没消掉就多撑一步，3 步后自动解冻（防死局）
+  state = tickPots(state);
+
   // 保险：连锁最多 30 层，防止逻辑 bug 导致死循环
   const MAX_CHAIN = 30;
 
@@ -572,6 +588,15 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     hadMatch = true;
     chain += 1;
     maxChain = Math.max(maxChain, chain);
+
+    /**
+     * 连坐：被消除格子的上下左右如果有「同种领导」，它会甩锅给你 ——
+     * 那一格不消失，而是变成灰色的「锅」。
+     *
+     * 这是给消除加「机会成本」的核心机制：
+     * 以前消掉同类集群只有好处，现在从集群中间下手会留下锅。
+     */
+    const potTargets = findPotTargets(board, matches);
 
     const outcome = clearMatches(board, matches, chain, move, state.modeConfig.chainCap);
     board = outcome.board;
@@ -584,14 +609,17 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
 
     for (const [type, count] of Object.entries(outcome.counts)) {
       const key = type as VillainType;
-      clearedCount[key] = (clearedCount[key] ?? 0) + (count ?? 0);
+      // 罪状集齐的领导「一个算三个」，推进目标更快
+      const mult = crimeMultiplier(state.crimeBook, key);
+      clearedCount[key] = (clearedCount[key] ?? 0) + (count ?? 0) * mult;
     }
 
     // 消除结果反馈到救援进度
     rescueState = feedRescue(rescueState, outcome.counts);
 
-    // 移除 → 重力 → 填充
+    // 移除 → 落下锅 → 重力 → 填充
     board = removeCleared(board, outcome.cleared);
+    board = placePots(board, potTargets);
 
     // 记录掉落起点：每个格子要到哪一行，以及它原来在哪一行
     const dropStarts = new Map<Tile, number>();
@@ -811,6 +839,116 @@ export function triggerQuiz(
   return { state: { ...state, pendingQuiz: quiz }, usedIds: nextUsed };
 }
 
+/**
+ * 找出哪些格子会被「连坐」成锅。
+ *
+ * 规则：被消除的格子，其上下左右如果也是同种类型（且不在本次消除列表里），
+ * 那它就是「被甩锅」的那个 —— 不消失，变成锅。
+ */
+function findPotTargets(board: Board, matches: Coord[]): Array<{ row: number; col: number }> {
+  // 只在「一次消掉 4 个以上同类」时才连坐 —— 包括三连就甩锅的话，棋盘会被锅占满
+  if (matches.length < 4) return [];
+
+  const inMatch = new Set(matches.map((m) => `${m.row},${m.col}`));
+  const targets: Array<{ row: number; col: number }> = [];
+  const seen = new Set<string>();
+
+  for (const m of matches) {
+    const src = getCell(board, m.row, m.col);
+    if (!src) continue;
+    for (const [dr, dc] of [
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+    ] as const) {
+      const r = m.row + dr;
+      const c = m.col + dc;
+      const key = `${r},${c}`;
+      if (inMatch.has(key) || seen.has(key)) continue;
+      const tile = getCell(board, r, c);
+      if (!tile || tile.isPot) continue;
+      if (tile.type !== src.type) continue;
+      seen.add(key);
+      targets.push({ row: r, col: c });
+    }
+  }
+
+  // 一次最多连坐 1 个。这是「有代价」和「不卡死」的平衡点
+  return targets.slice(0, 1);
+}
+
+/** 把锅放到棋盘上（覆盖原格子） */
+function placePots(board: Board, targets: Array<{ row: number; col: number }>): Board {
+  if (targets.length === 0) return board;
+  const next = board.map((row) => [...row]);
+  for (const t of targets) {
+    const tile = getCell(next, t.row, t.col);
+    if (!tile) continue;
+    next[t.row]![t.col] = { ...tile, isPot: true, potAge: 0 };
+  }
+  return next;
+}
+
+/**
+ * 每走一步，锅老化一次；到 3 步就解冻变回普通块。
+ *
+ * 为什么必须解冻：棋盘只有 49 格，如果锅永久占位，
+ * 十几步之后棋盘就死了。3 步是「有代价」和「不卡死」的平衡点。
+ */
+export function tickPots(state: GameState): GameState {
+  let changed = false;
+  const board = state.board.map((row) =>
+    row.map((tile) => {
+      if (!tile?.isPot) return tile;
+      const age = (tile.potAge ?? 0) + 1;
+      if (age >= 3) {
+        changed = true;
+        return { ...tile, isPot: false, potAge: undefined };
+      }
+      changed = true;
+      return { ...tile, potAge: age };
+    }),
+  );
+  return changed ? { ...state, board } : state;
+}
+
+/** 把当前棋盘状态整理成判定用的上下文 */
+export function buildQuizContext(state: GameState): QuizContext {
+  const typeCounts: QuizContext['typeCounts'] = {};
+  for (const row of state.board) {
+    for (const tile of row) {
+      if (!tile) continue;
+      typeCounts[tile.type] = (typeCounts[tile.type] ?? 0) + 1;
+    }
+  }
+
+  // 最紧急的救援还剩几秒
+  let minRescueSeconds = Number.POSITIVE_INFINITY;
+  for (const r of state.rescues) {
+    if (r.status !== 'active') continue;
+    const left = (1 - r.danger) * r.dangerSeconds;
+    if (left < minRescueSeconds) minRescueSeconds = left;
+  }
+
+  // 囚车进度
+  let current = 0;
+  let total = 0;
+  for (const goal of state.level.goals) {
+    total += goal.count;
+    current +=
+      goal.type === 'any'
+        ? Math.min(goal.count, state.totalCleared)
+        : Math.min(goal.count, state.clearedCount[goal.type] ?? 0);
+  }
+
+  return {
+    typeCounts,
+    minRescueSeconds,
+    prisonRatio: total === 0 ? 0 : current / total,
+  };
+}
+
 /** 回答一道题：答对给工具，答错什么都没 */
 export function answerQuiz(
   state: GameState,
@@ -825,14 +963,23 @@ export function answerQuiz(
   const option = quiz.options[optionIndex];
   if (!option) return { state: { ...state, pendingQuiz: null }, granted: null };
 
-  if (!option.correct) {
+  // 动态判定：有些选项只有特定棋盘状态才成立
+  const ctx = buildQuizContext(state);
+  if (!isOptionRight(option, ctx)) {
     return { state: { ...state, pendingQuiz: null, quizzesTaken: state.quizzesTaken + 1 }, granted: null };
   }
 
   const tool = getTool(quiz.reward);
   if (!tool) return { state: { ...state, pendingQuiz: null }, granted: null };
 
-  let next: GameState = { ...state, pendingQuiz: null, quizzesTaken: state.quizzesTaken + 1 };
+  // 答对：给这个领导记一条罪状（集齐 5 条解锁「一个算三个」）
+  const crimeBoss = quiz.from ?? state.level.types[0] ?? 'pua';
+  let next: GameState = {
+    ...state,
+    pendingQuiz: null,
+    quizzesTaken: state.quizzesTaken + 1,
+    crimeBook: addCrime(state.crimeBook, crimeBoss),
+  };
   const e = tool.effect;
 
   if (e.kind === 'moves') {

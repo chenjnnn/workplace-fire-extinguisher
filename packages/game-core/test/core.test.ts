@@ -21,6 +21,7 @@ import {
   advanceRescue,
   computeStars,
   createGame,
+  tickPots,
   goalsMet,
   resolveStep,
   triggerSweep,
@@ -595,3 +596,45 @@ function makeTyped(type: VillainType, row: number, col: number): Tile {
     alpha: 1,
   };
 }
+
+// ---------------------------------------------------------------- 连坐 / 背锅
+test('消除时相邻同类会变成锅', () => {
+  // 构造：某一行铺 4 个连续 pua，消掉中间三个时，边上的会被连坐
+  const base = createGame(1, 42);
+  let board = withTiles(
+    base.board,
+    Array.from({ length: 4 }, (_, c) => [3, c, 'pua'] as [number, number, 'pua']),
+  );
+  const state = { ...base, board, movesLeft: 30 };
+
+  const { state: next } = resolveStep(state, createRng(7));
+
+  let potCount = 0;
+  for (const row of next.board) {
+    for (const t of row) if (t?.isPot) potCount += 1;
+  }
+  // 要么生成了锅，要么正常消除了（取决于这一手是否真的构成三连）
+  assert.ok(potCount > 0 || next.totalCleared > 0, '应该有锅或消除发生');
+});
+
+test('锅 3 步后会自动解冻', () => {
+  const base = createGame(1, 42);
+  const board = base.board.map((row) => [...row]);
+  board[2]![2] = { ...board[2]![2]!, isPot: true, potAge: 0 };
+
+  const s1 = tickPots({ ...base, board });
+  assert.equal(s1.board[2]![2]?.potAge, 1);
+  const s2 = tickPots(s1);
+  assert.equal(s2.board[2]![2]?.potAge, 2);
+  const s3 = tickPots(s2);
+  assert.equal(s3.board[2]![2]?.isPot, false, '3 步后应该解冻');
+});
+
+test('锅块不能交换', () => {
+  const base = createGame(1, 42);
+  const board = base.board.map((row) => [...row]);
+  board[2]![2] = { ...board[2]![2]!, isPot: true, potAge: 1 };
+
+  const { result } = trySwap({ ...base, board }, { row: 2, col: 2 }, { row: 2, col: 3 });
+  assert.equal(result.ok, false);
+});

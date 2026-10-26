@@ -153,8 +153,11 @@ test('答题后 pendingQuiz 清空、计数 +1', () => {
 });
 
 test('清行工具真的清掉一整行（然后补满）', () => {
-  const game = createGame(1, 42);
+  const base = createGame(1, 42);
+  // 有些题的最佳回应带棋盘条件 —— 铺满对应类型保证能拿到工具
   const quiz = QUIZZES.find((q) => TOOLS[q.reward]?.effect.kind === 'clearRow');
+  const board = base.board.map((row) => row.map((t) => (t ? { ...t, type: 'pua' as const } : t)));
+  const game = { ...base, board };
   assert.ok(quiz, '应该有一道题奖励清行');
   const rightIdx = quiz!.options.findIndex((o) => o.correct);
   const before = game.board.map((row) => row.filter(Boolean).length);
@@ -165,10 +168,15 @@ test('清行工具真的清掉一整行（然后补满）', () => {
   assert.ok(state.score > game.score, '清行应该加分');
 });
 
-test('清列工具会加分', () => {
-  const game = createGame(1, 42);
+test('清列工具会加分（先把棋盘铺满足条件的类型）', () => {
+  const base = createGame(1, 42);
   const quiz = QUIZZES.find((q) => TOOLS[q.reward]?.effect.kind === 'clearCol');
   assert.ok(quiz);
+
+  // 这一题的最佳回应带条件（棋盘上要有足够多的甩锅侠），先把棋盘铺满
+  const board = base.board.map((row) => row.map((t) => (t ? { ...t, type: 'shirk' as const } : t)));
+  const game = { ...base, board };
+
   const rightIdx = quiz!.options.findIndex((o) => o.correct);
   const { state } = answerQuiz({ ...game, pendingQuiz: quiz! }, rightIdx);
   assert.ok(state.score > game.score);

@@ -195,6 +195,20 @@ export interface Tile {
   hp: number;
   /** 是否被毒雾污染（毒雾格要再消一次） */
   poisoned: boolean;
+  /**
+   * 「锅」块 —— 连坐机制的产物。
+   *
+   * 消除一个坏领导时，如果上下左右有同种领导，它会甩锅给你：
+   * 那块不消失，而是变成灰色的「锅」，占格子、不能交换、不算目标。
+   *
+   * 为什么需要它：三消的问题是「看到能消就消」，因为消除只有好处。
+   * 有了锅，消同类集群就要先想清楚代价 —— 从边缘下手还是从中间。
+   *
+   * 防死局：锅存在 potAge 步后自动消失（见 game.ts 的 tickPots）。
+   */
+  isPot?: boolean;
+  /** 锅已经存在多少步 */
+  potAge?: number;
   /** 渲染状态 */
   state: 'idle' | 'spawning' | 'clearing';
   /** 动画用：当前显示位置（格坐标，可为小数） */
@@ -382,6 +396,11 @@ export interface GameState {
   pendingQuiz: import('./quiz.ts').Quiz | null;
   /** 已经答过多少题（用于判断下一次该不该弹） */
   quizzesTaken: number;
+  /**
+   * 罪状簿：每种领导被记了多少条罪状。
+   * 集齐 5 条后，消他一个算三个（见 crimes.ts 的 crimeMultiplier）。
+   */
+  crimeBook: import('./crimes.ts').CrimeBook;
   /** 整局累计的救援结果，给结算页用 */
   rescuedCount: number;
   lostCount: number;
@@ -391,7 +410,7 @@ export interface GameState {
 
 export interface SwapResult {
   ok: boolean;
-  reason?: 'not_adjacent' | 'no_match' | 'busy' | 'same_cell' | 'out_of_bounds' | 'game_over';
+  reason?: 'not_adjacent' | 'no_match' | 'busy' | 'same_cell' | 'out_of_bounds' | 'game_over' | 'blocked';
 }
 
 // ---------------------------------------------------------------- 捏人

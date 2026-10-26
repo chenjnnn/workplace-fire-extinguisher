@@ -368,6 +368,8 @@ export interface TileSpriteOptions {
   size: number;
   /** 是否被毒雾污染 */
   poisoned?: boolean;
+  /** 是否是「锅」块（连坐机制产生的障碍） */
+  isPot?: boolean;
   /** 剩余血量（贪官 2 血时要显示裂痕） */
   hp?: number;
   /** 视觉变体编号（0/1/2） */
@@ -393,7 +395,50 @@ export function drawTileSprite(
   ctx: CanvasRenderingContext2D,
   options: TileSpriteOptions,
 ): void {
-  const { type, size, poisoned = false, hp = 1 } = options;
+  const { type, size, poisoned = false, hp = 1, isPot = false } = options;
+
+  // ---- 锅块：一块灰色的「锅」，不画脸
+  if (isPot) {
+    const c = size / 2;
+    const rr = size * 0.42;
+
+    // 锅底阴影
+    circle(ctx, c, c + size * 0.03, rr);
+    ctx.fillStyle = 'rgba(40, 36, 32, 0.18)';
+    ctx.fill();
+
+    // 锅体
+    circle(ctx, c, c, rr);
+    ctx.fillStyle = '#9ca3af';
+    ctx.fill();
+    // 锅的内壁
+    circle(ctx, c, c - rr * 0.06, rr * 0.78);
+    ctx.fillStyle = '#6b7280';
+    ctx.fill();
+    // 高光
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.beginPath();
+    ctx.ellipse(c - rr * 0.3, c - rr * 0.34, rr * 0.28, rr * 0.16, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+    // 锅把手
+    ctx.strokeStyle = '#4b5563';
+    ctx.lineWidth = size * 0.045;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(c + rr * 0.85, c);
+    ctx.lineTo(c + rr * 1.28, c);
+    ctx.stroke();
+
+    // 「锅」字
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `900 ${size * 0.36}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('锅', c, c + size * 0.01);
+
+    ctx.restore?.();
+    return;
+  }
 
   ctx.save();
 
@@ -1449,8 +1494,9 @@ export class SpriteCache {
     poisoned: boolean,
     hp: number,
     variant = 0,
+    isPot = false,
   ): HTMLCanvasElement {
-    const key = hashKey(`${type}|${Math.round(size)}|${poisoned}|${hp}|${variant}`);
+    const key = hashKey(`${type}|${Math.round(size)}|${poisoned}|${hp}|${variant}|${isPot}`);
     const cached = this.tiles.get(key);
     if (cached) return cached;
 
@@ -1461,7 +1507,7 @@ export class SpriteCache {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('无法创建离屏画布');
     ctx.scale(dpr, dpr);
-    drawTileSprite(ctx, { type, size, poisoned, hp, variant });
+    drawTileSprite(ctx, { type, size, poisoned, hp, variant, isPot });
 
     this.tiles.set(key, canvas);
     return canvas;

@@ -31,6 +31,10 @@ export interface SaveData {
   soundOn: boolean;
   /** 是否看过「虚构角色声明」 */
   disclaimerAck: boolean;
+  /** 罪状簿：每种领导记了几条罪状（集齐 5 条解锁「一个算三个」） */
+  crimes: Record<string, number>;
+  /** 离职信碎片：哪些关已经拿到（key = 关卡 id） */
+  fragments: Record<string, boolean>;
 }
 
 export function defaultSave(): SaveData {
@@ -46,6 +50,8 @@ export function defaultSave(): SaveData {
     avatar: { ...DEFAULT_AVATAR },
     soundOn: true,
     disclaimerAck: false,
+    crimes: {},
+    fragments: {},
   };
 }
 
@@ -66,6 +72,8 @@ export function loadSave(): SaveData {
       avatar: sanitizeAvatar(parsed.avatar ?? base.avatar),
       soundOn: typeof parsed.soundOn === 'boolean' ? parsed.soundOn : true,
       disclaimerAck: Boolean(parsed.disclaimerAck),
+      crimes: { ...base.crimes, ...(parsed.crimes ?? {}) },
+      fragments: { ...base.fragments, ...(parsed.fragments ?? {}) },
     };
   } catch {
     return defaultSave();

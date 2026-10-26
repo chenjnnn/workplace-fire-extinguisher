@@ -28,7 +28,9 @@ function PlayWithParams() {
   const levelId = Number.isFinite(raw) ? Math.min(Math.max(1, Math.floor(raw)), TOTAL_LEVELS) : 1;
   const modeParam = params.get('mode');
   const mode: GameMode = modeParam === 'catharsis' ? 'catharsis' : 'normal';
-  return <PlayClient levelId={levelId} mode={mode} />;
+  // 每日挑战：用日期做种子，全网同一局
+  const daily = params.get('daily') === '1';
+  return <PlayClient levelId={levelId} mode={mode} daily={daily} />;
 }
 
 function PlayFallback() {

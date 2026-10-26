@@ -45,7 +45,8 @@ export function findMatches(board: Board): Coord[] {
     for (let c = 1; c <= cols; c += 1) {
       const prev = getCell(board, r, c - 1);
       const cur = c < cols ? getCell(board, r, c) : null;
-      const same = prev !== null && cur !== null && prev.type === cur.type;
+      const same =
+        prev !== null && cur !== null && !prev.isPot && !cur.isPot && prev.type === cur.type;
       if (!same) {
         const runLen = c - runStart;
         if (runLen >= 3) {
@@ -65,7 +66,8 @@ export function findMatches(board: Board): Coord[] {
     for (let r = 1; r <= rows; r += 1) {
       const prev = getCell(board, r - 1, c);
       const cur = r < rows ? getCell(board, r, c) : null;
-      const same = prev !== null && cur !== null && prev.type === cur.type;
+      const same =
+        prev !== null && cur !== null && !prev.isPot && !cur.isPot && prev.type === cur.type;
       if (!same) {
         const runLen = r - runStart;
         if (runLen >= 3) {

@@ -158,6 +158,35 @@ export default function HomePage() {
           </Link>
         </section>
 
+        {/* 每日挑战 + 罪状簿 */}
+        <section className="mt-4 space-y-2">
+          <Link
+            href="/play/?level=3&daily=1"
+            className="flex items-center gap-3 rounded-xl bg-[#eef4ff] px-3.5 py-2.5"
+          >
+            <span className="text-xl">📅</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-bold text-[#1e40af]">今日挑战</p>
+              <p className="text-[10px] text-[#6b82b8]">全网同一局，比比谁扇得多</p>
+            </div>
+            <span className="text-[11px] font-bold text-[#3b82f6]">进入 →</span>
+          </Link>
+
+          <Link
+            href="/crimes/"
+            className="flex items-center gap-3 rounded-xl bg-white px-3.5 py-2.5"
+          >
+            <span className="text-xl">📓</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-bold text-[#5a5148]">罪状簿</p>
+              <p className="text-[10px] text-[#a89e93]">
+                已记 {Object.values(save.crimes ?? {}).reduce((a, b) => a + b, 0)} 条 · 集齐 5 条解锁「一个算三个」
+              </p>
+            </div>
+            <span className="text-[11px] font-bold text-[#8a8177]">查看 →</span>
+          </Link>
+        </section>
+
         {/* 次入口 */}
         <section className="mt-4 flex justify-center gap-4 text-[12px] text-[#b8a892]">
           <Link href="/levels/" className="hover:text-[#e8623c]">

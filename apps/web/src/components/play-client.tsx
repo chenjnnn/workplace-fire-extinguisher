@@ -56,7 +56,16 @@ function MiniStat({
   );
 }
 
-export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode?: GameMode }) {
+export function PlayClient({
+  levelId,
+  mode = 'normal',
+  daily = false,
+}: {
+  levelId: number;
+  mode?: GameMode;
+  /** 每日挑战：同一天全网同一局 */
+  daily?: boolean;
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<GameEngine | null>(null);
 
@@ -141,6 +150,7 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
       canvas,
       levelId,
       mode,
+      daily,
       avatar: save.avatar,
       onHud: (snapshot) => setHud(snapshot),
       onFinish: (state) => {
@@ -279,6 +289,16 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
           result={quizResult}
           onAnswer={(i) => {
             const r = engineRef.current?.answerQuizOption(i) ?? null;
+            // 答对了就立刻把罪状写进存档（不等结算，避免中途退出丢掉）
+            if (r?.correct) {
+              const engine = engineRef.current;
+              const board = engine?.getCrimeBook?.();
+              if (board) {
+                const next = loadSave();
+                next.crimes = board as Record<string, number>;
+                persistSave(next);
+              }
+            }
             setQuizResult(
               r
                 ? {

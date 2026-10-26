@@ -127,12 +127,69 @@ export const TOOLS: Record<string, Tool> = {
 };
 
 // ---------------------------------------------------------------- 问答
+/**
+ * 选项的成立条件 —— 让「正确答案」跟着棋盘变。
+ *
+ * 原本每个选项的 correct 是写死的，玩两遍就能背。
+ * 现在改成：某些选项只有在特定棋盘状态下才真的有效，
+ * 玩家必须先扫一眼棋盘再选。
+ */
+export type QuizCondition =
+  /** 无条件（原来的写死逻辑） */
+  | { kind: 'always' }
+  /** 棋盘上某种领导 ≥ min 个 —— 说明「当场怼回去」有用 */
+  | { kind: 'manyOf'; type: VillainType; min: number }
+  /** 有救援卡快超时 —— 这时候「和稀泥」拖住领导反而能争取时间 */
+  | { kind: 'rescueUrgent' }
+  /** 囚车快装满 —— 「认怂」能骗一个领导自己走进去 */
+  | { kind: 'prisonAlmostFull' };
+
+/** 判定条件需要的棋盘状态 */
+export interface QuizContext {
+  /** 每种类型在棋盘上的数量 */
+  typeCounts: Partial<Record<VillainType, number>>;
+  /** 最紧急的救援还剩几秒（没有救援就是 Infinity） */
+  minRescueSeconds: number;
+  /** 囚车进度 0-1 */
+  prisonRatio: number;
+}
+
 export interface QuizOption {
   text: string;
-  /** 是否正确（选对了才给工具） */
+  /** 是否正确（无 condition 时用这个） */
   correct: boolean;
+  /** 成立条件；不满足时这个选项不算对 */
+  condition?: QuizCondition;
   /** 领导的反应 */
   reaction: string;
+}
+
+/** 检查一个条件是否成立 */
+export function checkCondition(cond: QuizCondition | undefined, ctx: QuizContext): boolean {
+  if (!cond || cond.kind === 'always') return true;
+  if (cond.kind === 'manyOf') {
+    return (ctx.typeCounts[cond.type] ?? 0) >= cond.min;
+  }
+  if (cond.kind === 'rescueUrgent') {
+    return ctx.minRescueSeconds <= 8;
+  }
+  if (cond.kind === 'prisonAlmostFull') {
+    return ctx.prisonRatio >= 0.7;
+  }
+  return false;
+}
+
+/**
+ * 这个选项此刻算不算「说对了」。
+ *
+ * 有 condition 就只看条件（这样同一句话在不同棋盘下时对时错）；
+ * 没 condition 就用原来写死的 correct。
+ */
+export function isOptionRight(opt: QuizOption, ctx: QuizContext): boolean {
+  if (opt.condition && opt.condition.kind !== 'always') {
+    return checkCondition(opt.condition, ctx);
+  }
+  return opt.correct;
 }
 
 export interface Quiz {
@@ -160,7 +217,13 @@ export const QUIZZES: Quiz[] = [
     prompt: '你最近是不是有点不在状态？我看你准点就走了。',
     options: [
       { text: '对不起，我最近确实放松了，我调整一下。', correct: false, reaction: '他点点头：「年轻人要自觉。」' },
-      { text: '我的工作都按时交付了。准时下班不叫不在状态。', correct: true, reaction: '他张了张嘴，最后说了句「行吧」。' },
+      {
+        text: '我的工作都按时交付了。准时下班不叫不在状态。',
+        correct: true,
+        // 棋盘上画饼王越多，这句话越站得住 —— 你手里有活
+        condition: { kind: 'manyOf', type: 'pua', min: 6 },
+        reaction: '他张了张嘴，最后说了句「行吧」。',
+      },
       { text: '最近事情有点多，我尽量快一点。', correct: false, reaction: '「那就是效率问题。」他记下了。' },
     ],
     reward: 'recorder',
@@ -170,7 +233,12 @@ export const QUIZZES: Quiz[] = [
     from: 'shirk',
     prompt: '这个方案当初谁定的？现在出问题了吧。',
     options: [
-      { text: '是您在上上周的会上拍板的，纪要里有。', correct: true, reaction: '他翻了翻纪要，没再说话。' },
+      {
+        text: '是您在上上周的会上拍板的，纪要里有。',
+        correct: true,
+        condition: { kind: 'manyOf', type: 'shirk', min: 6 },
+        reaction: '他翻了翻纪要，没再说话。',
+      },
       { text: '是我们组一起讨论的。', correct: false, reaction: '「那就是你们组的问题。」' },
       { text: '我再去确认一下是谁定的。', correct: false, reaction: '「不用确认了，就你吧。」' },
     ],
@@ -249,7 +317,13 @@ export const QUIZZES: Quiz[] = [
     options: [
       { text: '好的，我周六过来。', correct: false, reaction: '「辛苦了，记你一次功劳。」没有然后。' },
       { text: '可以，按公司规定周末是双倍工资，流程走一下？', correct: true, reaction: '他沉默了一会儿：「……那我自己来吧。」' },
-      { text: '我周末有事。', correct: false, reaction: '「什么事比工作重要？」' },
+      {
+        text: '我周末有事。',
+        correct: false,
+        // 手上有快超时的救援时，这句硬顶反而会激怒他 —— 但能拖住他几分钟
+        condition: { kind: 'rescueUrgent' },
+        reaction: '他皱起眉，但被这句噎住，一时没继续逼。',
+      },
     ],
     reward: 'pressExpose',
   },
@@ -302,7 +376,13 @@ export const QUIZZES: Quiz[] = [
     from: 'grafter',
     prompt: '这次奖金是按团队发的，不单独给你。',
     options: [
-      { text: '好的，理解。', correct: false, reaction: '团队里只有他拿了。' },
+      {
+        text: '好的，理解。',
+        correct: false,
+        // 囚车快满了，顺着他说反而能让他自己凑到囚车边上
+        condition: { kind: 'prisonAlmostFull' },
+        reaction: '他满意地点点头，往前凑了一步 —— 离囚车更近了。',
+      },
       { text: '按团队发没问题，那发放明细能不能公开给团队看？', correct: true, reaction: '他皱眉：「这个……要走流程。」' },
       { text: '那我这部分是多少？', correct: false, reaction: '「还没算。」' },
     ],
@@ -325,7 +405,12 @@ export const QUIZZES: Quiz[] = [
     prompt: '这次的周报怎么没写够 500 字？',
     options: [
       { text: '我这周做的事不多，写不出 500 字。', correct: false, reaction: '「那就是你没事干。」' },
-      { text: '周报是为了同步信息，不是凑字数。我这周的三件事都写清楚了。', correct: true, reaction: '他看了看那三条，确实清楚。' },
+      {
+        text: '周报是为了同步信息，不是凑字数。我这周的三件事都写清楚了。',
+        correct: true,
+        condition: { kind: 'manyOf', type: 'formalist', min: 5 },
+        reaction: '他看了看那三条，确实清楚。',
+      },
       { text: '我下次多写点。', correct: false, reaction: '下周你写了 800 字废话。' },
     ],
     reward: 'coffee',
@@ -347,7 +432,12 @@ export const QUIZZES: Quiz[] = [
     prompt: '年轻人不要太计较眼前得失。',
     options: [
       { text: '您说得对。', correct: false, reaction: '他满意了。' },
-      { text: '我不计较得失，我计较的是承诺有没有兑现。', correct: true, reaction: '他沉默了。' },
+      {
+        text: '我不计较得失，我计较的是承诺有没有兑现。',
+        correct: true,
+        condition: { kind: 'manyOf', type: 'pua', min: 5 },
+        reaction: '他沉默了。',
+      },
       { text: '我也是没办法。', correct: false, reaction: '「没办法就忍着。」' },
     ],
     reward: 'payslip',
