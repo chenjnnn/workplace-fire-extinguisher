@@ -22,6 +22,8 @@ import {
   computeStars,
   createGame,
   tickPots,
+  uncoverTile,
+  fireFromSlot,
   goalsMet,
   resolveStep,
   triggerSweep,
@@ -646,4 +648,80 @@ test('锅块不能交换', () => {
 
   const { result } = trySwap({ ...base, board }, { row: 2, col: 2 }, { row: 2, col: 3 });
   assert.equal(result.ok, false);
+});
+
+// ---------------------------------------------------------------- 工位槽模式
+test('工位槽模式开局有文件堆遮挡', () => {
+  const game = createGame(1, 42, 'workstation');
+  let covered = 0;
+  for (const row of game.board) for (const t of row) if (t?.covered) covered += 1;
+  assert.ok(covered > 0, '应该有一些格子被文件堆盖住');
+  assert.equal(game.workSlotMax, 5);
+});
+
+test('被盖住的格子不能交换', () => {
+  const base = createGame(1, 42, 'workstation');
+  const board = base.board.map((r) => [...r]);
+  board[2]![2] = { ...board[2]![2]!, covered: true };
+  const { result } = trySwap({ ...base, board }, { row: 2, col: 2 }, { row: 2, col: 3 });
+  assert.equal(result.ok, false);
+});
+
+test('揭开文件堆消耗一步', () => {
+  const base = createGame(1, 42, 'workstation');
+  const board = base.board.map((r) => [...r]);
+  board[2]![2] = { ...board[2]![2]!, covered: true };
+  const state = { ...base, board };
+
+  const { state: next, ok } = uncoverTile(state, { row: 2, col: 2 });
+  assert.equal(ok, true);
+  assert.equal(next.board[2]![2]?.covered, false);
+  assert.equal(next.movesLeft, state.movesLeft - 1);
+});
+
+test('开除能清掉工位槽里的一个', () => {
+  const base = createGame(1, 42, 'workstation');
+  const state = { ...base, workSlots: ['pua' as const, 'shirk' as const] };
+  const { state: next, ok } = fireFromSlot(state, 0);
+  assert.equal(ok, true);
+  assert.equal(next.workSlots.length, 1);
+  assert.equal(next.workSlots[0], 'shirk');
+});
+
+test('工位槽堆满 5 个会失败', () => {
+  const base = createGame(3, 42, 'workstation');
+  // 直接构造一个槽差 1 个就满的局面，然后走一步非目标消除
+  const state = {
+    ...base,
+    workSlots: ['pua', 'pua', 'pua', 'pua'] as Array<'pua'>,
+  };
+  assert.equal(state.workSlotMax, 5);
+  // 只要槽 >= 5 就会被判负（下一手 resolveStep 会检查）
+  const overflow = { ...state, workSlots: ['pua', 'pua', 'pua', 'pua', 'pua'] as Array<'pua'> };
+  const { state: next } = resolveStep(overflow, createRng(3));
+  assert.equal(next.phase, 'lost');
+});
+
+test('连击统计真的会写回 state（回归：之前漏了）', () => {
+  const base = createGame(3, 42);
+  const board = withTiles(base.board, [
+    [3, 0, 'pua'],
+    [3, 1, 'pua'],
+    [3, 2, 'pua'],
+    [3, 3, 'pua'],
+  ]);
+  const { state: next } = resolveStep({ ...base, board, movesLeft: 30 }, createRng(5));
+  const total = Object.values(next.matchStats).reduce((a, b) => a + b, 0);
+  assert.ok(total > 0, '连击统计应该有数据，否则目标永远推进不了');
+});
+
+test('工位槽真的会累积（回归：之前漏了）', () => {
+  const base = createGame(3, 42, 'workstation');
+  const board = withTiles(base.board, [
+    [3, 0, 'formalist'],
+    [3, 1, 'formalist'],
+    [3, 2, 'formalist'],
+  ]);
+  const { state: next } = resolveStep({ ...base, board, movesLeft: 30 }, createRng(5));
+  assert.ok(next.workSlots.length > 0, '非目标类型应该进工位槽');
 });

@@ -105,14 +105,44 @@ export default function HomePage() {
           </Link>
         </section>
 
-        {/* 主按钮 */}
-        <section className="mt-12">
-          <Link
-            href={`/play/?level=${currentLevelId}`}
-            className="block w-full rounded-full bg-[#e8623c] py-4 text-center text-lg font-black tracking-wide text-white  transition active:scale-[0.98]"
-          >
-            开始游戏
-          </Link>
+        {/* 四种玩法入口 */}
+        <section className="mt-10">
+          <p className="mb-2 text-center text-[11px] font-bold tracking-wider text-[#b8a892]">
+            选择玩法
+          </p>
+          <div className="grid grid-cols-2 gap-2.5">
+            <Link
+              href={`/play/?level=${currentLevelId}`}
+              className="flex flex-col gap-1 rounded-2xl bg-[#e8623c] px-3.5 py-3 text-white transition active:scale-[0.98]"
+            >
+              <span className="text-[15px] font-black leading-tight">普通模式</span>
+              <span className="text-[10px] leading-snug text-white/85">凑够连击，装满囚车</span>
+            </Link>
+
+            <Link
+              href={`/play/?level=${currentLevelId}&mode=workstation`}
+              className="flex flex-col gap-1 rounded-2xl bg-[#f0b429] px-3.5 py-3 text-[#4a3a12] transition active:scale-[0.98]"
+            >
+              <span className="text-[15px] font-black leading-tight">工位槽</span>
+              <span className="text-[10px] leading-snug text-[#4a3a12]/70">文件堆遮挡 · 槽满就输</span>
+            </Link>
+
+            <Link
+              href="/drop/"
+              className="flex flex-col gap-1 rounded-2xl bg-white px-3.5 py-3 text-[#5a5148] transition active:scale-[0.98]"
+            >
+              <span className="text-[15px] font-black leading-tight">掉落式</span>
+              <span className="text-[10px] leading-snug text-[#a89e93]">方块往下掉的那种</span>
+            </Link>
+
+            <Link
+              href="/play/?level=3&daily=1"
+              className="flex flex-col gap-1 rounded-2xl bg-white px-3.5 py-3 text-[#5a5148] transition active:scale-[0.98]"
+            >
+              <span className="text-[15px] font-black leading-tight">今日挑战</span>
+              <span className="text-[10px] leading-snug text-[#a89e93]">全网同一局</span>
+            </Link>
+          </div>
           {save.progress.unlocked > 1 && (
             <p className="mt-2 text-center text-[11px] text-[#b8a892]">
               当前进度：第 {currentLevelId} 关 · {level.name}
@@ -140,37 +170,11 @@ export default function HomePage() {
         </section>
 
         {/* 新玩法入口 */}
-        <section className="mt-5">
-          <Link
-            href="/drop/"
-            className="flex items-center gap-3 rounded-xl  bg-[#fff8e8] px-3.5 py-3 transition active:scale-[0.99]"
-          >
-            <span className="text-2xl">🧱</span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-bold text-[#b45309]">掉落式 · 新玩法</p>
-              <p className="mt-0.5 text-[10px] text-[#a88a4a]">
-                一组三个往下掉，自己堆出三连
-              </p>
-            </div>
-            <span className="shrink-0 rounded-full bg-[#f59e0b] px-3 py-1.5 text-[11px] font-bold text-white">
-              试试
-            </span>
-          </Link>
-        </section>
+        
 
         {/* 每日挑战 + 罪状簿 */}
         <section className="mt-4 space-y-2">
-          <Link
-            href="/play/?level=3&daily=1"
-            className="flex items-center gap-3 rounded-xl bg-[#eef4ff] px-3.5 py-2.5"
-          >
-            <span className="text-xl">📅</span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-bold text-[#1e40af]">今日挑战</p>
-              <p className="text-[10px] text-[#6b82b8]">全网同一局，比比谁扇得多</p>
-            </div>
-            <span className="text-[11px] font-bold text-[#3b82f6]">进入 →</span>
-          </Link>
+          
 
           <Link
             href="/crimes/"

@@ -98,7 +98,8 @@ export const VILLAINS: Record<VillainType, VillainDef> = {
   },
 };
 
-export const VILLAIN_ORDER: VillainType[] = ['pua', 'shirk', 'grafter', 'overtime', 'formalist'];
+// 抢功精（grafter）按用户要求下线，游戏里只保留四种颜色
+export const VILLAIN_ORDER: VillainType[] = ['pua', 'shirk', 'overtime', 'formalist'];
 
 /**
  * 游戏模式
@@ -111,7 +112,7 @@ export const VILLAIN_ORDER: VillainType[] = ['pua', 'shirk', 'grafter', 'overtim
  *             · 特效更夸张
  *             仍然保留规则完整性，只是「让玩家赢」
  */
-export type GameMode = 'normal' | 'catharsis';
+export type GameMode = 'normal' | 'catharsis' | 'workstation';
 
 export interface ModeConfig {
   mode: GameMode;
@@ -132,6 +133,17 @@ export interface ModeConfig {
 }
 
 export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
+  workstation: {
+    mode: 'workstation',
+    name: '工位槽模式',
+    tagline: '工位就那么大，堆满了就完了',
+    chainCap: 2.6,
+    rageFactor: 1,
+    sweepLimit: 2,
+    dangerRate: 1,
+    penaltyOnRescueFail: false,
+    density: 1,
+  },
   normal: {
     mode: 'normal',
     name: '普通模式',
@@ -209,6 +221,14 @@ export interface Tile {
   isPot?: boolean;
   /** 锅已经存在多少步 */
   potAge?: number;
+  /**
+   * 是否被「文件堆」盖住（工位槽模式专用）。
+   *
+   * 被盖住的格子不能交换，要先点掉文件堆（花 1 步）才能动下面的领导。
+   * 为什么要这个：三消的问题是「信息全可见 → 没有侦查成本」，
+   * 遮住一部分格子，玩家就得先判断「值不值得花一步去翻开」。
+   */
+  covered?: boolean;
   /** 渲染状态 */
   state: 'idle' | 'spawning' | 'clearing';
   /** 动画用：当前显示位置（格坐标，可为小数） */
@@ -411,6 +431,15 @@ export interface GameState {
    * 例如 'pua:3' = 3 代表「画饼王凑成 3 连的次数」。
    */
   matchStats: Record<string, number>;
+  /**
+   * 工位槽（工位槽模式专用）。
+   *
+   * 消掉的「非目标」领导会堆到这里 —— 它们没被处理掉，只是堆在你工位上。
+   * 堆满 5 个 = 领导集体反扑 → 失败。
+   */
+  workSlots: Array<import('./types.ts').VillainType>;
+  /** 工位槽容量（工位槽模式默认 5，其他模式为 0 表示不启用） */
+  workSlotMax: number;
   /**
    * 罪状簿：每种领导被记了多少条罪状。
    * 集齐 5 条后，消他一个算三个（见 crimes.ts 的 crimeMultiplier）。

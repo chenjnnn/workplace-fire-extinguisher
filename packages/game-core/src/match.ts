@@ -152,7 +152,9 @@ export function findHint(board: Board): { a: Coord; b: Coord } | null {
   for (let r = 0; r < rows; r += 1) {
     for (let c = 0; c < cols; c += 1) {
       const here = { row: r, col: c };
-      if (!getCell(board, r, c)) continue;
+      const hereTile = getCell(board, r, c);
+      // 被文件堆盖住的格子动不了，提示不能指向它
+      if (!hereTile || hereTile.covered) continue;
 
       // 只看右边和下边，避免重复
       const candidates: Coord[] = [
@@ -162,6 +164,8 @@ export function findHint(board: Board): { a: Coord; b: Coord } | null {
 
       for (const other of candidates) {
         if (!inBounds(board, other.row, other.col)) continue;
+        const otherTile = getCell(board, other.row, other.col);
+        if (!otherTile || otherTile.covered) continue;
         const swapped = swappedBoard(board, here, other);
         if (!swapped) continue;
 

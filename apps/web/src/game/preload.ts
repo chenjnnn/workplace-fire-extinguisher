@@ -370,6 +370,8 @@ export interface TileSpriteOptions {
   poisoned?: boolean;
   /** 是否是「锅」块（连坐机制产生的障碍） */
   isPot?: boolean;
+  /** 是否被文件堆盖住（工位槽模式） */
+  covered?: boolean;
   /** 剩余血量（贪官 2 血时要显示裂痕） */
   hp?: number;
   /** 视觉变体编号（0/1/2） */
@@ -395,7 +397,51 @@ export function drawTileSprite(
   ctx: CanvasRenderingContext2D,
   options: TileSpriteOptions,
 ): void {
-  const { type, size, poisoned = false, hp = 1, isPot = false } = options;
+  const { type, size, poisoned = false, hp = 1, isPot = false, covered = false } = options;
+
+  // ---- 文件堆：一叠纸张盖住下面的领导
+  if (covered) {
+    const c = size / 2;
+    const w = size * 0.72;
+
+    // 一叠纸（三层错位）
+    for (let i = 2; i >= 0; i -= 1) {
+      const offset = i * size * 0.045;
+      ctx.save();
+      ctx.translate(c - w / 2 + offset, c - size * 0.16 - offset * 0.6);
+      ctx.rotate((i - 1) * 0.05);
+      ctx.fillStyle = i === 0 ? '#ffffff' : i === 1 ? '#f3f4f6' : '#e5e7eb';
+      roundRect(ctx, 0, 0, w, size * 0.5, size * 0.03);
+      ctx.fill();
+      ctx.strokeStyle = '#d1d5db';
+      ctx.lineWidth = size * 0.012;
+      ctx.stroke();
+      // 纸上的横线（代表文件内容）
+      if (i === 0) {
+        ctx.strokeStyle = '#c7cdd6';
+        ctx.lineWidth = size * 0.018;
+        for (let k = 0; k < 3; k += 1) {
+          ctx.beginPath();
+          ctx.moveTo(size * 0.06, size * 0.13 + k * size * 0.09);
+          ctx.lineTo(w - size * 0.06, size * 0.13 + k * size * 0.09);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    // 右上角的「待处理」角标
+    circle(ctx, c + w * 0.42, c - size * 0.24, size * 0.11);
+    ctx.fillStyle = '#f59e0b';
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `900 ${size * 0.13}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', c + w * 0.42, c - size * 0.24);
+
+    return;
+  }
 
   // ---- 锅块：一块灰色的「锅」，不画脸
   if (isPot) {
@@ -1495,8 +1541,9 @@ export class SpriteCache {
     hp: number,
     variant = 0,
     isPot = false,
+    covered = false,
   ): HTMLCanvasElement {
-    const key = hashKey(`${type}|${Math.round(size)}|${poisoned}|${hp}|${variant}|${isPot}`);
+    const key = hashKey(`${type}|${Math.round(size)}|${poisoned}|${hp}|${variant}|${isPot}|${covered}`);
     const cached = this.tiles.get(key);
     if (cached) return cached;
 
@@ -1507,7 +1554,7 @@ export class SpriteCache {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('无法创建离屏画布');
     ctx.scale(dpr, dpr);
-    drawTileSprite(ctx, { type, size, poisoned, hp, variant, isPot });
+    drawTileSprite(ctx, { type, size, poisoned, hp, variant, isPot, covered });
 
     this.tiles.set(key, canvas);
     return canvas;

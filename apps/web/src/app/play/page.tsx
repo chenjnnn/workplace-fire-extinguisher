@@ -27,7 +27,9 @@ function PlayWithParams() {
   const raw = Number(params.get('level') ?? '1');
   const levelId = Number.isFinite(raw) ? Math.min(Math.max(1, Math.floor(raw)), TOTAL_LEVELS) : 1;
   const modeParam = params.get('mode');
-  const mode: GameMode = modeParam === 'catharsis' ? 'catharsis' : 'normal';
+  // 三种模式都要认；其他值回落到 normal
+  const mode: GameMode =
+    modeParam === 'catharsis' ? 'catharsis' : modeParam === 'workstation' ? 'workstation' : 'normal';
   // 每日挑战：用日期做种子，全网同一局
   const daily = params.get('daily') === '1';
   return <PlayClient levelId={levelId} mode={mode} daily={daily} />;

@@ -165,6 +165,29 @@ export function createGame(levelId: number, seed?: number, mode: GameMode = 'nor
     avatar: makeRescueAvatar(levelId * 10 + idx),
   }));
 
+  /**
+   * 工位槽模式：随机用「文件堆」盖住一部分格子。
+   *
+   * 盖住的格子不能交换，要先点掉（花 1 步）。这是为了加「侦查成本」——
+   * 全可见时玩家一眼看穿全局，没有判断；遮一部分才需要决定「值不值得翻开」。
+   */
+  if (mode === 'workstation') {
+    const coverCount = Math.floor(board.length * (board[0]?.length ?? 0) * 0.22);
+    const cells: Array<[number, number]> = [];
+    for (let r = 0; r < board.length; r += 1) {
+      for (let c = 0; c < (board[r]?.length ?? 0); c += 1) cells.push([r, c]);
+    }
+    // 洗牌后取前 N 个
+    for (let i = cells.length - 1; i > 0; i -= 1) {
+      const j = rng.int(i + 1);
+      [cells[i], cells[j]] = [cells[j]!, cells[i]!];
+    }
+    for (const [r, c] of cells.slice(0, coverCount)) {
+      const t = board[r]?.[c];
+      if (t) board[r]![c] = { ...t, covered: true };
+    }
+  }
+
   const state: GameState = {
     level,
     board,
@@ -180,6 +203,8 @@ export function createGame(levelId: number, seed?: number, mode: GameMode = 'nor
     quizzesTaken: 0,
     crimeBook: {},
     matchStats: {},
+    workSlots: [],
+    workSlotMax: mode === 'workstation' ? 5 : 0,
     rescuedCount: 0,
     lostCount: 0,
     rescuePenalty: 0,
@@ -303,6 +328,10 @@ function feedRescue(state: GameState, counts: Partial<Record<VillainType, number
 export function trySwap(state: GameState, a: Coord, b: Coord): { state: GameState; result: SwapResult } {
   // 锅块是障碍，不能交换
   if (getCell(state.board, a.row, a.col)?.isPot || getCell(state.board, b.row, b.col)?.isPot) {
+    return { state, result: { ok: false, reason: 'blocked' } };
+  }
+  // 被文件堆盖住的格子要先翻开
+  if (getCell(state.board, a.row, a.col)?.covered || getCell(state.board, b.row, b.col)?.covered) {
     return { state, result: { ok: false, reason: 'blocked' } };
   }
   if (state.phase !== 'idle') {
@@ -573,6 +602,7 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
   const events: ComboEvent[] = [];
   const clearedCount = { ...state.clearedCount };
   const matchStats: Record<string, number> = { ...state.matchStats };
+  const workSlots: VillainType[] = [...state.workSlots];
   let totalCleared = 0;
   let rescueState = state;
   let hadMatch = false;
@@ -632,6 +662,22 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     // 消除结果反馈到救援进度
     rescueState = feedRescue(rescueState, outcome.counts);
 
+    /**
+     * 工位槽模式：消掉的「非目标」领导没被处理掉，只是堆到你工位上。
+     * 堆满 workSlotMax（5 个）→ 领导集体反扑 → 失败。
+     * 目标类型直接关押进囚车，不进槽。
+     */
+    if (state.mode === 'workstation' && state.workSlotMax > 0) {
+      const goalTypes = new Set(state.level.goals.map((g) => g.type));
+      for (const [type, count] of Object.entries(outcome.counts)) {
+        const key = type as VillainType;
+        if (goalTypes.has(key) || goalTypes.has('any')) continue;
+        for (let n = 0; n < (count ?? 0); n += 1) {
+          if (workSlots.length < state.workSlotMax + 1) workSlots.push(key);
+        }
+      }
+    }
+
     // 移除 → 落下锅 → 重力 → 填充
     board = removeCleared(board, outcome.cleared);
     board = placePots(board, potTargets);
@@ -688,6 +734,9 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     events,
     totalCleared: state.totalCleared + totalCleared,
     clearedCount,
+    // 这两个之前漏了写回 —— 连击目标和工位槽都不会推进
+    matchStats,
+    workSlots,
     // 救援进度与失败计数从中间态合并回来
     rescues: rescueState.rescues,
     rescuedCount: rescueState.rescuedCount,
@@ -700,13 +749,46 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
 
   // 判定胜负
   const won = goalsMet(next);
+  // 工位槽堆满 = 领导集体反扑，直接失败（优先于「步数用完」）
+  const slotOverflow =
+    next.mode === 'workstation' && next.workSlotMax > 0 && next.workSlots.length >= next.workSlotMax;
+
   if (won) {
     next = { ...next, phase: 'won' };
+  } else if (slotOverflow) {
+    next = { ...next, phase: 'lost' };
   } else if (next.movesLeft <= 0) {
     next = { ...next, phase: 'lost' };
   }
 
   return { state: next, hadMatch, reshuffled };
+}
+
+/**
+ * 揭开一格文件堆（消耗 1 步）。
+ */
+export function uncoverTile(state: GameState, coord: Coord): { state: GameState; ok: boolean } {
+  if (state.phase !== 'idle') return { state, ok: false };
+  const tile = getCell(state.board, coord.row, coord.col);
+  if (!tile?.covered) return { state, ok: false };
+  if (state.movesLeft <= 0) return { state, ok: false };
+
+  const board = state.board.map((row) => [...row]);
+  board[coord.row]![coord.col] = { ...tile, covered: false };
+
+  return {
+    state: { ...state, board, movesLeft: state.movesLeft - 1 },
+    ok: true,
+  };
+}
+
+/** 用「开除」清掉工位槽里的一个领导 */
+export function fireFromSlot(state: GameState, index: number): { state: GameState; ok: boolean } {
+  if (state.phase !== 'idle') return { state, ok: false };
+  if (index < 0 || index >= state.workSlots.length) return { state, ok: false };
+  const slots = [...state.workSlots];
+  slots.splice(index, 1);
+  return { state: { ...state, workSlots: slots }, ok: true };
 }
 
 // ---------------------------------------------------------------- 问答
@@ -1144,6 +1226,7 @@ export function triggerSweep(
 
   const clearedCount = { ...state.clearedCount };
   const matchStats: Record<string, number> = { ...state.matchStats };
+  const workSlots: VillainType[] = [...state.workSlots];
   for (const [t, count] of Object.entries(outcome.counts)) {
     const key = t as VillainType;
     clearedCount[key] = (clearedCount[key] ?? 0) + (count ?? 0);
