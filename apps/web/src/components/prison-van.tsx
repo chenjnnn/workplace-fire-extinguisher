@@ -26,8 +26,6 @@ interface VanSlot {
   name: string;
   color: string;
   state: 'done' | 'current' | 'future';
-  current: number;
-  need: number;
 }
 
 interface Props {
@@ -94,7 +92,6 @@ export function PrisonVan({ sequence, skipsLeft, onSkip, canSweep, sweepLeft, on
               {sequence.map((slot, i) => {
                 const done = slot.state === 'done';
                 const isCurrent = slot.state === 'current';
-                const ratio = slot.need === 0 ? 1 : Math.min(1, slot.current / slot.need);
 
                 return (
                   <div
@@ -130,24 +127,13 @@ export function PrisonVan({ sequence, skipsLeft, onSkip, canSweep, sweepLeft, on
                       )}
                     </div>
 
-                    {/* 已完成次数 / 需要次数 */}
+                    {/* 状态：没有数量，只有「该抓 / 已抓 / 待抓」 */}
                     <span
-                      className="font-num mt-0.5 text-[9px] leading-none"
+                      className="mt-0.5 text-[8px] leading-none"
                       style={{ color: done ? '#7dd3a0' : isCurrent ? '#ffffff' : '#8b95a3' }}
                     >
-                      {Math.min(slot.current, slot.need)}/{slot.need}次
+                      {done ? '已抓' : isCurrent ? '现在' : '待抓'}
                     </span>
-
-                    {/* 进度条 */}
-                    <div className="mt-1 h-[3px] w-full overflow-hidden rounded-full bg-white/15">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{
-                          width: `${(done ? 1 : ratio) * 100}%`,
-                          backgroundColor: done ? '#4ade80' : slot.color,
-                        }}
-                      />
-                    </div>
                   </div>
                 );
               })}

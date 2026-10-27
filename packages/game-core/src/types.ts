@@ -261,13 +261,6 @@ export interface Coord {
  *   救援落底、订单、清冰块需要新的棋盘元素（可掉落的受害者、可覆盖的冰层），
  *   属于独立的机制模块，硬塞进这一轮会做得很糙。留到下一轮单独做。
  */
-/** 囚车上的一个隔间：要抓哪种、要抓几只 */
-export interface TargetStep {
-  type: VillainType;
-  /** 需要消除几只才推进到下一格（第 1-9 关固定 1） */
-  need: number;
-}
-
 export interface LevelGoal {
   /** 要清掉的类型；'any' = 任意类型（清除目标） */
   type: VillainType | 'any';
@@ -309,17 +302,16 @@ export interface LevelConfig {
   /** 步数上限 */
   moves: number;
   /**
-   * 囚车任务：要「按颜色顺序」抓的人。
+   * 囚车任务链：按顺序列出要抓的颜色。
    *
-   * 为什么用顺序而不是「随便凑够 N 个」：
-   * 随便凑的时候消哪种颜色都一样，玩家不需要看目标；
-   * 指定顺序之后，「现在该抓红色」变成了一条明确指令，
-   * 玩家的每一次交换都在为当前这一格服务。
+   * 每个元素只是颜色，**不带数量** —— 消掉一次就算完成这一格。
    *
-   * 第 1-9 关每格 need = 1（抓到一只就推进）；
-   * 第 10 关起需要 need > 1（同一颜色要抓够几只才推进）。
+   * 为什么这么设计：
+   *   带数量时玩家会算「还差几只」，注意力在数字上；
+   *   不带数量时注意力回到「现在该抓什么颜色」，链本身就成了节奏。
+   *   难度改由「链多长、给多少步、给多少时间、棋盘好不好凑」共同决定。
    */
-  targetSequence: TargetStep[];
+  targetChain: VillainType[];
   /** 过关最低分数（星级线依次为 minScore / 2星线 / 3星线） */
   minScore: number;
   starScores: [number, number, number];

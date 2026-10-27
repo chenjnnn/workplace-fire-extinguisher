@@ -33,7 +33,6 @@ import type {
   LevelConfig,
   RescueTarget,
   SwapResult,
-  TargetStep,
   Tile,
   VillainType,
 } from './types.ts';
@@ -616,37 +615,20 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
       clearedCount[key] = (clearedCount[key] ?? 0) + (count ?? 0);
 
       /**
-       * 囚车是「按颜色顺序」的：
-       *   · 只有当前这一格指定的颜色才推进进度
-       *   · 其他颜色照常得分，但只累计「非目标消除数」（满 5 个可以跳过一格）
-       *   · 一次消太多时会连续推进多个隔间，所以用 while 而不是 if
-       */
-      const seq = state.level.targetSequence;
-
-      /**
-       * 进度按「次数」算，不按「个数」。
+       * 任务链按「次数」推进，每一格只要消掉一次就完成。
        *
-       * 用户的原话：「n 是现在消过的次数而不是个数，m 是要求的总次数」。
-       *
-       * 规则：
-       *   · 这一手如果命中了当前目标色，就算 1 次（消 1 只还是 5 只都一样）
-       *   · 如果序列里连续几格都是同色，这一手的「1 次」可以继续填下一格 ——
-       *     这样「一次消除完成多个隔间」才成立
-       *   · 没命中的颜色只累计「非目标消除数」（满 5 个换一次跳过）
+       * 用户的要求：「每个元素不带数量，消掉一次即视为完成」。
+       * 所以这里只看「这一手有没有命中链上当前那一格的颜色」，
+       * 命中就前进一格；序列里连续同色时一手可以连过几格。
        */
-      if (key === seq[seqIndex]?.type) {
-        seqProgress += 1;
-        // 连续同色：一次消除可以一路填过去
-        while (seqIndex < seq.length) {
-          const cur = seq[seqIndex]!;
-          if (cur.type !== key) break;
-          if (seqProgress < Math.max(1, cur.need)) break;
+      const chain = state.level.targetChain;
+      if (key === chain[seqIndex]) {
+        seqIndex += 1;
+        // 连续同色：这一手可以继续往下填
+        while (seqIndex < chain.length && chain[seqIndex] === key) {
           seqIndex += 1;
-          seqProgress = 0;
-          // 下一格还是同色 → 这一手再记 1 次
-          if (seq[seqIndex]?.type === key) seqProgress = 1;
-          else break;
         }
+        seqProgress = 0;
       } else {
         offTargetCleared += count ?? 0;
       }
@@ -950,7 +932,7 @@ export function answerQuiz(
  * 不够就随机把几个格子改成目标色。
  */
 function ensureTargetPresent(board: Board, state: GameState, rng: Rng): Board {
-  const target = state.level.targetSequence[state.seqIndex];
+  const target = state.level.targetChain[state.seqIndex];
   if (!target) return board;
 
   const spots: Array<{ row: number; col: number }> = [];
@@ -959,7 +941,7 @@ function ensureTargetPresent(board: Board, state: GameState, rng: Rng): Board {
     for (let c = 0; c < (board[r]?.length ?? 0); c += 1) {
       const tile = board[r]?.[c];
       if (!tile) continue;
-      if (tile.type === target.type) count += 1;
+      if (tile.type === target) count += 1;
       else spots.push({ row: r, col: c });
     }
   }
@@ -971,7 +953,7 @@ function ensureTargetPresent(board: Board, state: GameState, rng: Rng): Board {
     if (!spot) break;
     const tile = next[spot.row]?.[spot.col];
     if (!tile) continue;
-    next[spot.row]![spot.col] = { ...tile, type: target.type, hp: VILLAINS[target.type].hp };
+    next[spot.row]![spot.col] = { ...tile, type: target, hp: VILLAINS[target].hp };
   }
   return next;
 }
@@ -984,15 +966,15 @@ function shortageType(
   board: Board,
   state: GameState,
 ): VillainType | null {
-  const target = state.level.targetSequence[state.seqIndex];
+  const target = state.level.targetChain[state.seqIndex];
   if (!target) return null;
   let count = 0;
   for (const row of board) {
     for (const tile of row) {
-      if (tile && tile.type === target.type) count += 1;
+      if (tile && tile.type === target) count += 1;
     }
   }
-  return count < 3 ? target.type : null;
+  return count < 3 ? target : null;
 }
 
 
@@ -1047,7 +1029,7 @@ export function addTime(state: GameState, seconds: number): GameState {
  */
 export function skipCurrentTarget(state: GameState): { state: GameState; ok: boolean } {
   if (state.phase !== 'idle') return { state, ok: false };
-  if (state.seqIndex >= state.level.targetSequence.length) return { state, ok: false };
+  if (state.seqIndex >= state.level.targetChain.length) return { state, ok: false };
 
   const earned = Math.floor(state.offTargetCleared / 5);
   if (earned <= state.skipsUsed) return { state, ok: false };
@@ -1064,59 +1046,53 @@ export function skipCurrentTarget(state: GameState): { state: GameState; ok: boo
 }
 
 /**
- * 当前要抓的隔间（按 targetSequence 顺序推进）。
- * 全部抓完时返回 null。
+ * 当前要抓的颜色（任务链上第一个没完成的）。
+ * 链上全部完成时返回 null。
  */
-export function currentTarget(state: GameState): TargetStep | null {
-  return state.level.targetSequence[state.seqIndex] ?? null;
+export function currentTarget(state: GameState): VillainType | null {
+  return state.level.targetChain[state.seqIndex] ?? null;
 }
 
-/** 是否全部隔间都抓完了 */
+/** 链上所有格都完成了 */
 export function goalsMet(state: GameState): boolean {
-  return state.seqIndex >= state.level.targetSequence.length;
+  return state.seqIndex >= state.level.targetChain.length;
 }
 
 /**
  * 囚车面板用的进度数据。
  *
- * 三种状态：
+ * 每一格只有三种状态，**没有数量**：
  *   done    —— 已经抓完（打勾变灰）
- *   current —— 正在抓（显示 已消/need）
- *   future  —— 还没轮到（只显示颜色和 need）
+ *   current —— 正在抓（高亮）
+ *   future  —— 还没轮到（压暗）
  */
 export function sequenceProgress(state: GameState): Array<{
-  step: TargetStep;
+  type: VillainType;
   index: number;
   state: 'done' | 'current' | 'future';
-  current: number;
-  need: number;
 }> {
-  return state.level.targetSequence.map((step, index) => {
-    if (index < state.seqIndex) {
-      return { step, index, state: 'done' as const, current: step.need, need: step.need };
-    }
-    if (index === state.seqIndex) {
-      return { step, index, state: 'current' as const, current: state.seqProgress, need: step.need };
-    }
-    return { step, index, state: 'future' as const, current: 0, need: step.need };
+  return state.level.targetChain.map((type, index) => {
+    if (index < state.seqIndex) return { type, index, state: 'done' as const };
+    if (index === state.seqIndex) return { type, index, state: 'current' as const };
+    return { type, index, state: 'future' as const };
   });
 }
 
 /**
  * 失败时还差什么（给结算页用）。
+ *
+ * 链上没有数量，所以「还差」就是「还剩几个什么颜色」。
  */
 export function missingTargets(state: GameState): Array<{ type: VillainType; left: number }> {
-  const rest = state.level.targetSequence.slice(state.seqIndex);
-  if (rest.length === 0) return [];
-  const out: Array<{ type: VillainType; left: number }> = [];
-  for (let i = 0; i < rest.length; i += 1) {
-    const step = rest[i]!;
-    const already = i === 0 ? state.seqProgress : 0;
-    out.push({ type: step.type, left: Math.max(0, step.need - already) });
+  const rest = state.level.targetChain.slice(state.seqIndex);
+  const merged: Array<{ type: VillainType; left: number }> = [];
+  for (const type of rest) {
+    const hit = merged.find((m) => m.type === type);
+    if (hit) hit.left += 1;
+    else merged.push({ type, left: 1 });
   }
-  return out;
+  return merged;
 }
-
 
 /**
  * 死局重排：保留所有格子（类型不变），只打乱位置。

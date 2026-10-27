@@ -362,7 +362,7 @@ test('目标达成判定（按颜色顺序）', () => {
   assert.equal(goalsMet(game), false);
 
   // 只有 seqIndex 推进到末尾才算完成
-  const done = { ...game, seqIndex: game.level.targetSequence.length };
+  const done = { ...game, seqIndex: game.level.targetChain.length };
   assert.equal(goalsMet(done), true);
 
   // 光是清理数堆满不算 —— 现在看的是顺序进度
@@ -370,26 +370,25 @@ test('目标达成判定（按颜色顺序）', () => {
   assert.equal(goalsMet(byCount), false);
 });
 
-test('消除当前目标色会推进囚车（need=1 时抓一只前进一格）', () => {
+test('消除当前目标色会推进任务链（一次消除推一格）', () => {
   const base = createGame(1, 42);
-  const first = base.level.targetSequence[0]!;
-  assert.equal(first.need, 1);
+  const first = base.level.targetChain[0]!;
 
   // 造一排三种当前目标色（用 withTiles，它会同时把 hp 改对）
   const board = withTiles(base.board, [
-    [3, 0, first.type],
-    [3, 1, first.type],
-    [3, 2, first.type],
+    [3, 0, first],
+    [3, 1, first],
+    [3, 2, first],
   ]);
   const { state: next } = resolveStep({ ...base, board, movesLeft: 20 }, createRng(5));
   assert.ok(next.seqIndex >= 1, `应该至少推进一格，实际 seqIndex=${next.seqIndex}`);
 });
 
-test('消除非目标色不推进囚车，但会累计跳过进度', () => {
+test('消除非目标色不推进任务链，但会累计跳过进度', () => {
   const base = createGame(1, 42);
-  const first = base.level.targetSequence[0]!;
+  const first = base.level.targetChain[0]!;
   const other = (['pua', 'shirk', 'grafter', 'overtime', 'formalist'] as const).find(
-    (t) => t !== first.type,
+    (t) => t !== first,
   )!;
 
   const board = withTiles(base.board, [

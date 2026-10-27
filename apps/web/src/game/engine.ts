@@ -57,8 +57,6 @@ export interface HudSnapshot {
     name: string;
     color: string;
     state: 'done' | 'current' | 'future';
-    current: number;
-    need: number;
   }>;
   /** 当前目标色（棋盘高亮用） */
   targetType: VillainType | null;
@@ -1463,7 +1461,7 @@ export class GameEngine {
      * 玩家的视线在棋盘上时根本注意不到。所以直接把提示放到棋盘上。
      */
     const target = currentTarget(this.state);
-    if (target && target.type === tile.type && tile.state === 'idle') {
+    if (target && target === tile.type && tile.state === 'idle') {
       const pulse = 0.55 + 0.45 * Math.sin(this.time * 5);
       ctx.save();
       ctx.globalAlpha = pulse * 0.85;
@@ -1527,14 +1525,12 @@ export class GameEngine {
       rageMax: s.rageMax,
       phase: s.phase,
       sequence: seq.map((p) => ({
-        type: p.step.type,
-        name: VILLAINS[p.step.type].name,
-        color: VILLAINS[p.step.type].color,
+        type: p.type,
+        name: VILLAINS[p.type].name,
+        color: VILLAINS[p.type].color,
         state: p.state,
-        current: p.current,
-        need: p.need,
       })),
-      targetType: target?.type ?? null,
+      targetType: target ?? null,
       offTargetCleared: s.offTargetCleared,
       taskTimeLeft: s.taskTimeLeft,
       levelTimeLeft: s.levelTimeLeft,
@@ -1562,11 +1558,9 @@ export class GameEngine {
         : null,
       overall: (() => {
         // 顺序囚车：总进度 = 已抓完的隔间数 + 当前隔间的进度
-        const total = s.level.targetSequence.reduce((a, x) => a + Math.max(1, x.need), 0);
-        const done = s.level.targetSequence
-          .slice(0, s.seqIndex)
-          .reduce((a, x) => a + Math.max(1, x.need), 0);
-        const current = Math.min(total, done + s.seqProgress);
+        // 纯颜色链：总长就是链长，进度就是已完成的格数
+        const total = s.level.targetChain.length;
+        const current = Math.min(total, s.seqIndex);
         return { current, total, ratio: total === 0 ? 1 : current / total };
       })(),
       rescues: s.rescues.map((r) => ({

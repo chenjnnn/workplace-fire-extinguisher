@@ -196,7 +196,7 @@ export function SceneIntro({ level, scene, onStart }: Props) {
             <span>{level.moves} 步</span>
             <span className="text-[#d8cbb8]">·</span>
             <span>
-              {level.targetSequence.map((g) => VILLAINS[g.type].name).join(' → ')}
+              {level.targetChain.map((t) => VILLAINS[t].name).join(' → ')}
             </span>
           </div>
 
