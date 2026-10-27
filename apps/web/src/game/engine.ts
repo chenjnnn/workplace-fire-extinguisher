@@ -216,6 +216,8 @@ export class GameEngine {
   /** 已答过的题 id（跨局持久化，保证不重复） */
   /** 是否暂停中 */
   private paused = false;
+  /** UI 遮挡（问答弹窗、奖励卡）时暂停倒计时 */
+  private uiPaused = false;
   private quizUsedIds: string[] = [];
   /** 答题后的回调，用来把 usedIds 存进 localStorage */
   private onQuizUsed?: (ids: string[]) => void;
@@ -275,6 +277,7 @@ export class GameEngine {
     if (typeof window !== 'undefined') {
       (window as unknown as { __VC_ENGINE__?: unknown }).__VC_ENGINE__ = {
         snapshot: () => this.debugSnapshot(),
+        setUiPaused: (v: boolean) => this.setUiPaused(v),
         /** 仅供 e2e：直接把本关判为通关（用来验证胜利页） */
         debugWin: () => {
           this.state = {
@@ -390,6 +393,16 @@ export class GameEngine {
      */
     this.scheduleRelayout();
     this.emitHud();
+  }
+
+  /**
+   * UI 遮挡时暂停倒计时。
+   *
+   * 为什么需要它：答题后 pendingQuiz 会被清空，但奖励卡还显示在屏幕上。
+   * 光靠 pendingQuiz 判断的话，奖励卡一出现倒计时就恢复了 —— 玩家在读卡片时被扣时间。
+   */
+  setUiPaused(v: boolean): void {
+    this.uiPaused = v;
   }
 
   /** 延后重算布局（等 React 把结算页撤掉、容器恢复真实尺寸） */
@@ -1116,7 +1129,7 @@ export class GameEngine {
      * 用户的要求：「当做题中任务弹出来的时候，时间需要暂停，题目做完后再继续计时」。
      * 所以除了 idle，还要排除 pendingQuiz（弹窗打开）和 busy（动画中）。
      */
-    if (this.state.phase === 'idle' && !this.state.pendingQuiz && !this.busy) {
+    if (this.state.phase === 'idle' && !this.state.pendingQuiz && !this.busy && !this.uiPaused) {
       const before = this.state.taskTimeLeft + this.state.levelTimeLeft;
       const ticked = tickTimer(this.state, dt);
       if (ticked !== this.state) {

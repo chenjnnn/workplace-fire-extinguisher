@@ -642,11 +642,15 @@ function makeTyped(type: VillainType, row: number, col: number): Tile {
 }
 
 // ---------------------------------------------------------------- 倒计时
-test('第 5 关起有任务倒计时', () => {
-  assert.ok((createGame(4, 42).level.taskTimerSeconds ?? 0) === 0, '第 4 关不该有倒计时');
-  const g5 = createGame(5, 42);
-  assert.ok((g5.level.taskTimerSeconds ?? 0) > 0, '第 5 关应该有倒计时');
-  assert.equal(g5.taskTimeLeft, g5.level.taskTimerSeconds);
+test('每一关都有任务倒计时，且前松后紧', () => {
+  const first = createGame(1, 42);
+  const last = createGame(10, 42);
+  assert.ok((first.level.taskTimerSeconds ?? 0) > 0, '第 1 关也要有倒计时');
+  assert.ok(
+    (first.level.taskTimerSeconds ?? 0) > (last.level.taskTimerSeconds ?? 0),
+    '第 1 关的时间应该比第 10 关宽松',
+  );
+  assert.equal(first.taskTimeLeft, first.level.taskTimerSeconds);
 });
 
 test('倒计时会随时间减少', () => {

@@ -101,6 +101,17 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
       setQuizResult(null);
     }
   }, [hud?.pendingQuiz, activeQuiz]);
+
+  /**
+   * 只要问答弹窗（出题 + 奖励卡）还开着，就暂停倒计时。
+   *
+   * 注意要盯 activeQuiz 而不是 hud.pendingQuiz：
+   * 答题后引擎已经把 pendingQuiz 清掉了，但奖励卡还在，
+   * 那种时候不该开始计时。
+   */
+  useEffect(() => {
+    engineRef.current?.setUiPaused(activeQuiz !== null);
+  }, [activeQuiz]);
   const [finished, setFinished] = useState<GameState | null>(null);
   const [share, setShare] = useState<ShareData | null>(null);
   const [avatar, setAvatar] = useState<AvatarConfig | null>(null);
