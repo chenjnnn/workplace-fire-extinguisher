@@ -20,7 +20,8 @@ import {
   sequenceProgress,
   canSweepNow,
   sweepEarned,
-  SWEEP_SCORE_STEP,
+  sweepThresholdsOf,
+  sweepProgress,
   tickTimer,
   addTime,
   skipCurrentTarget,
@@ -81,10 +82,14 @@ export interface HudSnapshot {
   stars: number;
   seed: number;
   canSweep: boolean;
-  /** 下一次收网需要的分数 */
-  sweepNextScore: number;
-  /** 已经攒到几次收网机会 */
+  /** 这一关两次收网的门槛 */
+  sweepThresholds: [number, number];
+  /** 攒到第几次了（0/1/2） */
   sweepEarnedCount: number;
+  /** 距离下一次收网的圆环进度 0-1 */
+  sweepRatio: number;
+  /** 下一次门槛的分数 */
+  sweepNextScore: number;
   mode: GameMode;
   modeName: string;
   rescues: Array<{
@@ -1552,8 +1557,10 @@ export class GameEngine {
       stars: computeStars(s),
       seed: s.seed,
       canSweep: canSweepNow(s),
-      sweepNextScore: SWEEP_SCORE_STEP * (sweepEarned(s) + 1),
+      sweepThresholds: sweepThresholdsOf(s),
       sweepEarnedCount: sweepEarned(s),
+      sweepRatio: sweepProgress(s).ratio,
+      sweepNextScore: sweepProgress(s).to,
       mode: s.mode,
       modeName: s.modeConfig.name,
       sweepUsed: s.sweepUsed,

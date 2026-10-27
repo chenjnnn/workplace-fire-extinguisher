@@ -192,12 +192,9 @@ export function SceneIntro({ level, scene, onStart }: Props) {
 
         {/* 开打 + 底栏 */}
         <div className="mt-6 pb-6">
+          {/* 用户要求删掉这里的目标链文字（太长，而且进游戏后囚车上能直接看到） */}
           <div className="mb-3 flex items-center justify-center gap-2 text-[11px] text-[#8a8177]">
             <span>{level.moves} 步</span>
-            <span className="text-[#d8cbb8]">·</span>
-            <span>
-              {level.targetChain.map((t) => VILLAINS[t].name).join(' → ')}
-            </span>
           </div>
 
           <button

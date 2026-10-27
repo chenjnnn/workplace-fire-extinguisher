@@ -30,20 +30,32 @@ interface VanSlot {
 
 interface Props {
   sequence: VanSlot[];
-  /** 还能跳过几次（每消 5 个非目标色换 1 次） */
-  skipsLeft: number;
-  onSkip: () => void;
   /** 收网：能不能用 */
   canSweep: boolean;
-  /** 本关还能用几次收网 */
-  sweepLeft: number;
+  /** 这一关的两个门槛 */
+  sweepThresholds: [number, number];
+  /** 攒到第几次了 */
+  sweepEarned: number;
+  /** 距离下一次收网的圆环进度 0-1 */
+  sweepRatio: number;
+  /** 下一次门槛分数 */
+  sweepNextScore: number;
   onSweep: () => void;
 }
 
-export function PrisonVan({ sequence, skipsLeft, onSkip, canSweep, sweepLeft, onSweep }: Props) {
+export function PrisonVan({
+  sequence,
+  canSweep,
+  sweepThresholds,
+  sweepEarned,
+  sweepRatio,
+  sweepNextScore,
+  onSweep,
+}: Props) {
   const doneCount = sequence.filter((s) => s.state === 'done').length;
   const allDone = sequence.length > 0 && doneCount === sequence.length;
-  const sweepUsable = canSweep && sweepLeft > 0;
+  const sweepUsable = canSweep;
+  const usedAll = sweepEarned >= sweepThresholds.length;
 
   // 隔间多的时候缩小头像，保证一行放得下
   const tileSize = sequence.length >= 7 ? 18 : sequence.length >= 5 ? 22 : 26;
@@ -63,16 +75,6 @@ export function PrisonVan({ sequence, skipsLeft, onSkip, canSweep, sweepLeft, on
               <span className="text-[#b8a892]"> / {sequence.length} 间</span>
             </span>
           </div>
-
-          {skipsLeft > 0 && (
-            <button
-              type="button"
-              onClick={onSkip}
-              className="mb-1 flex w-full items-center justify-center gap-1 rounded-md bg-[#fff3e8] py-1 text-[10px] font-bold text-[#ff6b4a] active:scale-[0.98]"
-            >
-              ⏭ 跳过这一格（还剩 {skipsLeft} 次）
-            </button>
-          )}
 
           <div className="relative rounded-t-[10px] rounded-b-[4px] bg-[#3d4655] px-1.5 pb-2 pt-1.5">
             {/* 警灯 */}
@@ -148,34 +150,54 @@ export function PrisonVan({ sequence, skipsLeft, onSkip, canSweep, sweepLeft, on
           </div>
         </div>
 
-        {/* ---- 收网（警笛） ---- */}
-        <button
-          type="button"
-          onClick={onSweep}
-          disabled={!sweepUsable}
-          className={`relative flex shrink-0 flex-col items-center justify-center gap-1 rounded-xl transition active:scale-95 disabled:active:scale-100 ${
-            sweepUsable ? 'w-[62px]' : 'w-[58px]'
-          }`}
-          style={{
-            backgroundColor: sweepUsable ? '#ff6b4a' : '#f0e8dc',
-            color: sweepUsable ? '#ffffff' : '#b8a892',
-          }}
-          aria-label="跳过当前目标"
-        >
-          <span className="text-[22px] leading-none">{sweepUsable ? '🚨' : '🔒'}</span>
-          <span className="text-[10px] font-bold leading-none">{sweepUsable ? '跳过' : '攒分中'}</span>
-          {sweepLeft > 0 && (
-            <span
-              className="absolute right-1 top-1 rounded-full px-1 text-[8px] leading-none"
-              style={{
-                backgroundColor: sweepUsable ? 'rgba(255,255,255,0.3)' : '#e0d3c0',
-                color: sweepUsable ? '#fff' : '#a89e93',
-              }}
-            >
-              {sweepLeft}
+        {/* ---- 跳过（收网）：圆环进度围着按钮 ---- */}
+        <div className="relative flex w-[64px] shrink-0 items-center justify-center">
+          {/*
+            圆环 = 距离下一次激活的进度。
+            用户要求「攒分应该有一个进度条，把收网这个按钮用进度条围起来」，
+            所以这里用 SVG 画一个环形进度，把按钮包在中间。
+          */}
+          <svg className="pointer-events-none absolute inset-0" viewBox="0 0 64 64">
+            <circle cx="32" cy="32" r="29" fill="none" stroke="#f0e8dc" strokeWidth="4" />
+            <circle
+              cx="32"
+              cy="32"
+              r="29"
+              fill="none"
+              stroke={sweepUsable ? '#ff6b4a' : '#ffc93c'}
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeDasharray={`${Math.max(0, Math.min(1, sweepRatio)) * 2 * Math.PI * 29} ${2 * Math.PI * 29}`}
+              transform="rotate(-90 32 32)"
+              style={{ transition: 'stroke-dasharray .3s ease-out' }}
+            />
+          </svg>
+
+          <button
+            type="button"
+            onClick={onSweep}
+            disabled={!sweepUsable}
+            className="relative flex h-[46px] w-[46px] flex-col items-center justify-center rounded-full transition active:scale-95 disabled:active:scale-100"
+            style={{
+              backgroundColor: sweepUsable ? '#ff6b4a' : usedAll ? '#c9c1b6' : '#fff8ec',
+              color: sweepUsable ? '#ffffff' : usedAll ? '#ffffff' : '#a89e93',
+              boxShadow: sweepUsable ? '0 0 0 3px rgba(255,107,74,.18)' : 'none',
+            }}
+            aria-label="跳过当前目标"
+          >
+            <span className="text-[17px] leading-none">{sweepUsable ? '🚨' : usedAll ? '✓' : '🔒'}</span>
+            <span className="mt-0.5 text-[8px] font-bold leading-none">
+              {sweepUsable ? '跳过' : usedAll ? '用完' : '攒分'}
+            </span>
+          </button>
+
+          {/* 门槛提示：告诉玩家还差多少分 */}
+          {!sweepUsable && !usedAll && (
+            <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white/90 px-1 text-[7px] font-bold leading-tight text-[#a89e93]">
+              {sweepNextScore}
             </span>
           )}
-        </button>
+        </div>
       </div>
     </section>
   );

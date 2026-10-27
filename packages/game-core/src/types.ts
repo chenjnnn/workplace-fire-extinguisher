@@ -316,6 +316,13 @@ export interface LevelConfig {
   minScore: number;
   starScores: [number, number, number];
   /**
+   * 收网的激活分数（两次）。
+   *
+   * 用户的要求：「设计一个分数，完成多少分之后第一次激活，完成多少分之后第二次激活」。
+   * 所以每关最多能跳过两格，两次门槛逐关抬高。
+   */
+  sweepThresholds?: [number, number];
+  /**
    * 每个囚车间隔的倒计时（秒）。不填 = 这一关没有任务倒计时。
    *
    * 每抓完一个隔间会重置。倒计时归零 = 这个领导跑了 = 整关失败。

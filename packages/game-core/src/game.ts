@@ -1148,11 +1148,20 @@ function shuffleBoard(board: Board, level: LevelConfig, rng: Rng): Board {
  * 所以它不再清棋盘，而是直接推进任务链一格 ——
  * 本质是「用分数换一次跳过」，用来解开卡在某个颜色的局面。
  */
-export const SWEEP_SCORE_STEP = 2500;
+/** 默认两次激活门槛（关卡没配时用） */
+export const DEFAULT_SWEEP_THRESHOLDS: [number, number] = [2500, 5500];
 
-/** 按分数算，一共能收网几次 */
+/** 这一关的两个门槛 */
+export function sweepThresholdsOf(state: GameState): [number, number] {
+  return state.level.sweepThresholds ?? DEFAULT_SWEEP_THRESHOLDS;
+}
+
+/** 按分数算，一共攒到几次收网机会（0/1/2） */
 export function sweepEarned(state: GameState): number {
-  return Math.floor(state.score / SWEEP_SCORE_STEP);
+  const [a, b] = sweepThresholdsOf(state);
+  if (state.score >= b) return 2;
+  if (state.score >= a) return 1;
+  return 0;
 }
 
 /** 现在能不能收网 */
@@ -1160,6 +1169,19 @@ export function canSweepNow(state: GameState): boolean {
   if (state.phase !== 'idle') return false;
   if (state.seqIndex >= state.level.targetChain.length) return false;
   return sweepEarned(state) > state.sweepUsed;
+}
+
+/**
+ * 距离下一次收网还差多少（给圆环进度用）。
+ * 返回 { from, to, ratio }：from = 上一次门槛，to = 下一次门槛，ratio = 0-1
+ */
+export function sweepProgress(state: GameState): { from: number; to: number; ratio: number } {
+  const [a, b] = sweepThresholdsOf(state);
+  const used = state.sweepUsed;
+  const from = used === 0 ? 0 : used === 1 ? a : b;
+  const to = used === 0 ? a : b;
+  if (to <= from) return { from, to, ratio: 1 };
+  return { from, to, ratio: Math.min(1, Math.max(0, (state.score - from) / (to - from))) };
 }
 
 export function triggerSweep(

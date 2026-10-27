@@ -459,33 +459,41 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
             {hud?.movesLeft ?? 0}
           </p>
         </div>
-        {/* 跳过进度：攒够分数就能跳过当前这一格（按钮在囚车右边） */}
+        {/* 跳过进度：两个门槛，攒够就能跳一格（圆环在囚车右边按钮上） */}
         <div className="flex flex-1 flex-col justify-center rounded-xl bg-white px-3 py-2">
           <div className="flex items-baseline justify-between">
             <p className="text-[10px] text-[#b8a892]">跳过进度</p>
             <p
               className="font-num text-[10px] leading-none"
-              style={{ color: hud?.canSweep ? '#f97316' : '#b8a892' }}
+              style={{ color: hud?.canSweep ? '#ff6b4a' : '#b8a892' }}
             >
-              {hud?.canSweep
-                ? '可用！'
-                : `${(hud?.score ?? 0) - (hud?.sweepEarnedCount ?? 0) * 2500}/${2500}`}
+              {hud?.canSweep ? '可用！' : `${hud?.score ?? 0}/${hud?.sweepNextScore ?? 0}`}
             </p>
           </div>
           <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#f0e4d4]">
             <div
               className="h-full rounded-full transition-all duration-300"
               style={{
-                width: `${hud?.canSweep ? 100 : Math.min(100, Math.max(0, ((hud?.score ?? 0) - (hud?.sweepEarnedCount ?? 0) * 2500) / 25))}%`,
+                width: `${Math.round((hud?.sweepRatio ?? 0) * 100)}%`,
                 backgroundColor: hud?.canSweep ? '#ff6b4a' : '#ffc93c',
               }}
             />
           </div>
-          {hud?.canSweep && (
-            <p className="mt-1 text-[9px] font-bold leading-none text-[#f97316]">
-              点右边 🚨 跳过这一格
-            </p>
-          )}
+          <div className="mt-1 flex items-center justify-between">
+            <span className="text-[8px] leading-none text-[#c9bda9]">
+              {(hud?.sweepThresholds ?? [0, 0]).map((t, i) => (
+                <span
+                  key={i}
+                  className="font-num"
+                  style={{ color: (hud?.sweepEarnedCount ?? 0) > i ? '#2e8b57' : '#c9bda9' }}
+                >
+                  {i > 0 ? ' · ' : ''}
+                  {t}
+                </span>
+              ))}
+            </span>
+            <span className="text-[8px] leading-none text-[#c9bda9]">两次</span>
+          </div>
         </div>
       </section>
 
@@ -502,10 +510,11 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
 
       <PrisonVan
         sequence={hud?.sequence ?? []}
-        skipsLeft={hud?.skipsLeft ?? 0}
-        onSkip={() => engineRef.current?.skipTarget()}
         canSweep={hud?.canSweep ?? false}
-        sweepLeft={Math.max(0, (hud?.sweepLimit ?? 0) - (hud?.sweepUsed ?? 0))}
+        sweepThresholds={hud?.sweepThresholds ?? [2500, 5500]}
+        sweepEarned={hud?.sweepEarnedCount ?? 0}
+        sweepRatio={hud?.sweepRatio ?? 0}
+        sweepNextScore={hud?.sweepNextScore ?? 0}
         onSweep={sweep}
       />
 

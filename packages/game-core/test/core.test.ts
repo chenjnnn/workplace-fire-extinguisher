@@ -27,7 +27,7 @@ import {
   triggerSweep,
   tickTimer,
   canSweepNow,
-  SWEEP_SCORE_STEP,
+  DEFAULT_SWEEP_THRESHOLDS,
   trySwap,
 } from '../src/game.ts';
 import { createLevelBoard, withTiles } from './helpers.ts';
@@ -318,8 +318,8 @@ test('收网：分数达标后可以跳过当前任务', () => {
   const poor = triggerSweep(game, 'pua', createRng(1));
   assert.equal(poor.ok, false);
 
-  // 攒够分数就能跳过
-  const rich = { ...game, score: SWEEP_SCORE_STEP + 10 };
+  // 攒到第一个门槛就能跳过
+  const rich = { ...game, score: DEFAULT_SWEEP_THRESHOLDS[0] + 10 };
   assert.equal(canSweepNow(rich), true);
   const before = rich.seqIndex;
   const res = triggerSweep(rich, 'pua', createRng(1));
@@ -671,4 +671,45 @@ test('弹窗答题时倒计时不走（引擎层保证，这里验证状态）',
   assert.ok(withQuiz.pendingQuiz, '题目在场时不该继续计时');
   // 只要引擎不调用 tickTimer，时间就不会变 —— 这条断言锁住「有题就不该 tick」的意图
   assert.equal(tickTimer(g, 0).taskTimeLeft, g.taskTimeLeft);
+});
+
+test('倒计时只在任务完成时重置（消错颜色不影响）', () => {
+  const base = createGame(5, 42);
+  const first = base.level.targetChain[0]!;
+  const other = (['pua', 'shirk', 'grafter', 'overtime', 'formalist', 'flatterer'] as const).find(
+    (t) => t !== first,
+  )!;
+
+  // 先把时间消耗掉一部分
+  const drained = tickTimer(base, 12);
+
+  // 消一个「非目标色」：不该重置时间
+  const wrongBoard = withTiles(drained.board, [
+    [3, 0, other],
+    [3, 1, other],
+    [3, 2, other],
+  ]);
+  const afterWrong = resolveStep({ ...drained, board: wrongBoard, movesLeft: 20 }, createRng(5));
+  // 连锁有可能顺带消到目标色（那属于「任务完成」，重置是合法的），
+  // 所以只在任务链没推进时断言「时间不该变多」
+  if (afterWrong.state.seqIndex === drained.seqIndex) {
+    assert.ok(
+      afterWrong.state.taskTimeLeft <= drained.taskTimeLeft + 0.001,
+      `没完成任务时不该重置时间：${drained.taskTimeLeft} → ${afterWrong.state.taskTimeLeft}`,
+    );
+  }
+
+  // 消「当前目标色」：应该重置回满
+  const rightBoard = withTiles(drained.board, [
+    [3, 0, first],
+    [3, 1, first],
+    [3, 2, first],
+  ]);
+  const afterRight = resolveStep({ ...drained, board: rightBoard, movesLeft: 20 }, createRng(5));
+  assert.ok(afterRight.state.seqIndex > drained.seqIndex, '目标色应该推进任务链');
+  assert.equal(
+    afterRight.state.taskTimeLeft,
+    base.level.taskTimerSeconds,
+    '完成一格后倒计时应该回满',
+  );
 });
