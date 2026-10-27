@@ -175,9 +175,10 @@ async function main() {
 
   const snap2 = await page.evaluate(() => window.__VC_ENGINE__?.snapshot());
   check('连续操作后仍在合理状态', ['idle', 'won', 'lost'].includes(snap2.phase), `phase=${snap2.phase} 分数 ${snap2.score}`);
+  // 关卡变短（L1 只有 3 格链）后，几步之内可能都是无效交换，分数不一定涨
   check(
-    '分数持续增长',
-    snap2.score > snap1.score || snap2.phase !== 'idle',
+    '分数不会倒退',
+    snap2.score >= snap1.score || snap2.phase !== 'idle',
     `${snap1.score} → ${snap2.score}${snap2.phase !== 'idle' ? `（phase=${snap2.phase}）` : ''}`,
   );
   await page.screenshot({ path: `${OUT}11-mid-game.png` });

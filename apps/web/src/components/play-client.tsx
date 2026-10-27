@@ -171,6 +171,15 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
     });
     engineRef.current = engine;
 
+    /**
+     * 换关（点「下一关」）时 Next 的客户端路由不会重新挂载这个组件，
+     * 所以 finished 会留着上一关的结算数据 ——
+     * 表现就是「点下一关，直接进下一关的结算页」。
+     * 这里在引擎重建（= 换关）时清空。
+     */
+    setFinished(null);
+    setShare(null);
+
     return () => {
       document.body.classList.remove('game-locked');
       engine.destroy();

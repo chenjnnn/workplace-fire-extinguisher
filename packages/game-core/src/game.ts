@@ -591,6 +591,14 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
   let offTargetStreak = state.offTargetStreak;
   // 这一手的得分（在循环里按 chain 累加，用于决定收网积分）
   let gainedThisMove = 0;
+  /**
+   * 这一手是否已经推进过任务链。
+   *
+   * 用户的要求：「我消除蓝色的时候正好消除了粉色，不能视作下一个任务粉色完成了」。
+   * 所以一次操作（含它的连锁）只认第一次命中当前目标色的消除，
+   * 同一手里顺手消掉的其他颜色不算进度。
+   */
+  let advancedThisMove = false;
   let totalCleared = 0;
   let rescueState = state;
   let hadMatch = false;
@@ -630,7 +638,8 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
        * 命中就前进一格；序列里连续同色时一手可以连过几格。
        */
       const chain = state.level.targetChain;
-      if (key === chain[seqIndex]) {
+      if (!advancedThisMove && key === chain[seqIndex]) {
+        advancedThisMove = true;
         seqIndex += 1;
         // 连续同色：这一手可以继续往下填
         while (seqIndex < chain.length && chain[seqIndex] === key) {

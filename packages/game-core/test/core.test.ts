@@ -669,3 +669,47 @@ test('score 模式：不管连消几次都攒分（前 10 关）', () => {
   assert.equal(base.sweepScore, 0);
   assert.equal(base.offTargetStreak, 0);
 });
+
+test('一次操作只推进一格：顺手消掉下一个颜色不算完成', () => {
+  const base = createGame(6, 42); // L6 链是 overtime, formalist, pua, ...
+  const [c0, c1] = base.level.targetChain;
+  assert.notEqual(c0, c1, '这个测试需要链上前两格是不同颜色');
+
+  // 造一个能同时消掉「当前目标色」和「下一个目标色」的棋盘：
+  // 第 3 行 = c0 c0 c0（三连），第 4 行 = c1 c1 c1（三连）
+  let board = base.board;
+  board = withTiles(board, [
+    [3, 0, c0!],
+    [3, 1, c0!],
+    [3, 2, c0!],
+    [4, 0, c1!],
+    [4, 1, c1!],
+    [4, 2, c1!],
+  ]);
+
+  const { state: next } = resolveStep({ ...base, board, movesLeft: 20 }, createRng(5));
+
+  // 第一格必须完成；第二格（不同颜色）不该被「顺带」完成
+  assert.ok(next.seqIndex >= 1, '当前目标色应该完成一格');
+  assert.equal(
+    next.seqIndex,
+    1,
+    `只该推进一格，实际推进到 ${next.seqIndex}（链：${base.level.targetChain.join(',')}）`,
+  );
+});
+
+test('同色连续格仍然可以一手推多格', () => {
+  // L1 链是 pua, pua, shirk —— 前两格同色
+  const base = createGame(1, 42);
+  const c0 = base.level.targetChain[0]!;
+  assert.equal(base.level.targetChain[1], c0, 'L1 前两格应该是同色');
+
+  // 消一排 3 个当前色 → 应该同时完成前两格
+  const board = withTiles(base.board, [
+    [3, 0, c0],
+    [3, 1, c0],
+    [3, 2, c0],
+  ]);
+  const { state: next } = resolveStep({ ...base, board, movesLeft: 20 }, createRng(5));
+  assert.ok(next.seqIndex >= 2, `同色连续应该一次推两格，实际 ${next.seqIndex}`);
+});
