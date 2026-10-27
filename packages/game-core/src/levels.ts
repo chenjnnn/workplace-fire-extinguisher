@@ -40,15 +40,6 @@ export const LEVELS: LevelConfig[] = [
     targetChain: ['pua', 'pua', 'shirk'],
     minScore: 3200,
     starScores: [3200, 5600, 8200],
-    rescues: [
-      {
-        name: '小林',
-        situation: '入职两年，工资没涨，饼吃了三张',
-        type: 'pua',
-        needed: 20,
-        dangerSeconds: 20,
-      },
-    ],
   },
   {
     id: 2,
@@ -77,22 +68,6 @@ export const LEVELS: LevelConfig[] = [
     targetChain: ['pua', 'pua', 'shirk', 'shirk'],
     minScore: 2400,
     starScores: [2400, 3900, 5600],
-    rescues: [
-      {
-        name: '小林',
-        situation: '被说"再熬一熬就是骨干"，熬了两年',
-        type: 'pua',
-        needed: 12,
-        dangerSeconds: 26,
-      },
-      {
-        name: '大刘',
-        situation: '上个月的锅还背在身上',
-        type: 'shirk',
-        needed: 12,
-        dangerSeconds: 28,
-      },
-    ],
   },
   {
     id: 3,
@@ -121,15 +96,6 @@ export const LEVELS: LevelConfig[] = [
     targetChain: ['pua', 'pua', 'overtime', 'overtime', 'shirk'],
     minScore: 2800,
     starScores: [2800, 4400, 6400],
-    rescues: [
-      {
-        name: '小美',
-        situation: '连上 12 天班，工位有张折叠床',
-        type: 'overtime',
-        needed: 18,
-        dangerSeconds: 22,
-      },
-    ],
   },
   {
     id: 4,
@@ -158,15 +124,6 @@ export const LEVELS: LevelConfig[] = [
     targetChain: ['grafter', 'grafter', 'formalist', 'formalist', 'overtime', 'overtime'],
     minScore: 4800,
     starScores: [4800, 8200, 14000],
-    rescues: [
-      {
-        name: '陈工',
-        situation: '方案他写的，汇报领导去的',
-        type: 'grafter',
-        needed: 18,
-        dangerSeconds: 24,
-      },
-    ],
   },
   {
     id: 5,
@@ -195,22 +152,6 @@ export const LEVELS: LevelConfig[] = [
     targetChain: ['pua', 'pua', 'shirk', 'shirk', 'grafter', 'grafter'],
     minScore: 5800,
     starScores: [5800, 7800, 9500],
-    rescues: [
-      {
-        name: '林姐',
-        situation: '一天开六个会，正事没做',
-        type: 'pua',
-        needed: 16,
-        dangerSeconds: 24,
-      },
-      {
-        name: '阿杰',
-        situation: '三年的优秀员工都不是他',
-        type: 'shirk',
-        needed: 16,
-        dangerSeconds: 26,
-      },
-    ],
     rules: { poisonEveryMoves: 6 },
   },
   {

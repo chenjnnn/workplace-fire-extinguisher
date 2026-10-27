@@ -1,11 +1,14 @@
 /**
  * 救援机制验证
  *
- * 验证的是这次新增的核心循环：
+ * 验证的是这条循环：
  *   消除对应坏人 → 救援进度推进 + 危险值回退
  *   倒计时涨满 → 救援失败但不结束游戏
  *   救援失败 → 星级上限被砍
  *   两种模式的难度差异真的生效
+ *
+ * ⚠️ 现在所有关卡都移除了救援目标（用户要求「不要小林那种卡」），
+ * 所以这个脚本的主要断言会跳过 —— 底层代码保留，方便以后重新启用救援。
  */
 
 import { chromium } from 'playwright';
@@ -75,6 +78,15 @@ async function skipTutorial(page) {
 }
 
 /** 进入游戏：等开场动画结束 → 点开打 → 等引擎就绪 */
+/** 这一版所有关卡都没有救援目标，脚本整体跳过 */
+async function noRescueMode(page) {
+  const n = await page.evaluate(() => {
+    const s = window.__VC_ENGINE__?.snapshot();
+    return s?.rescues?.length ?? 0;
+  });
+  return n === 0;
+}
+
 async function enterGame(page) {
   await skipTutorial(page);
   // 开场动画约 3 秒，按钮到「开打」这一幕才真正可点
@@ -124,6 +136,16 @@ async function main() {
 
 
   const snap0 = await snapshot(page);
+
+  // 这一版所有关卡都没有救援目标 —— 后面的救援断言整体跳过
+  if ((snap0?.rescues?.length ?? 0) === 0) {
+    console.log('\nℹ️ 当前版本没有救援目标（已按要求移除），救援相关断言跳过。');
+    check('第 1 关没有救援目标（符合当前设计）', true);
+    await browser.close();
+    console.log(`\n结果：1/1 项通过`);
+    process.exit(0);
+  }
+
   check('第 1 关有救援目标', (snap0?.rescues?.length ?? 0) === 1, JSON.stringify(snap0?.rescues));
   check('救援目标有倒计时字段', typeof snap0?.rescues?.[0]?.danger === 'number');
   check('普通模式标识正确', snap0?.mode === 'normal');

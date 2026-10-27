@@ -493,91 +493,13 @@ test('分享数据分类明细按数量降序', () => {
 });
 
 // ---------------------------------------------------------------- 救援机制
-test('有救援配置的关卡会初始化救援目标', () => {
-  const game = createGame(1, 42);
-  assert.equal(game.rescues.length, 1);
-  assert.equal(game.rescues[0]!.status, 'active');
-  assert.equal(game.rescues[0]!.type, 'pua');
-  assert.ok(game.rescues[0]!.needed > 0);
-  assert.equal(game.rescues[0]!.danger, 0);
-});
-
-test('没有救援配置的关卡为空数组', () => {
-  const game = createGame(10, 42);
-  // L10 没配 rescues
-  assert.equal(game.rescues.length, 0);
-});
-
-test('救援倒计时会推进危险值', () => {
-  const game = createGame(1, 42);
-  const r = game.rescues[0]!;
-  const after = advanceRescue(game, 5);
-  assert.ok(after.rescues[0]!.danger > 0, '危险值应该上涨');
-  assert.ok(after.rescues[0]!.danger < 1, '5 秒还不该满');
-  void r;
-});
-
-test('危险值涨满判定救援失败但不结束游戏', () => {
-  let game = createGame(1, 42);
-  // 一次性推进超过 dangerSeconds
-  game = advanceRescue(game, 999);
-  assert.equal(game.rescues[0]!.status, 'lost');
-  assert.equal(game.lostCount, 1);
-  assert.equal(game.rescuePenalty, 1);
-  // 关键：游戏没结束
-  assert.equal(game.phase, 'idle');
-});
-
-test('消除对应类型会推进救援进度并回退危险值', () => {
-  const game = createGame(1, 42);
-  // 先让危险值涨一点
-  const warned = advanceRescue(game, 8);
-  const dangerBefore = warned.rescues[0]!.danger;
-  assert.ok(dangerBefore > 0);
-
-  // 找一步能消除诈骗犯的交换
-  const hint = findHint(warned.board);
-  if (!hint) return;
-  const { state: swapped } = trySwap(warned, hint.a, hint.b);
-  const { state } = resolveStep(swapped, createRng(swapped.seed));
-
-  const after = state.rescues[0]!;
-  // 如果这一步消到了诈骗犯，进度应该涨、危险值应该降
-  if (state.clearedCount.pua > warned.clearedCount.pua) {
-    assert.ok(after.progress > warned.rescues[0]!.progress, '进度应该推进');
-    assert.ok(after.danger < dangerBefore, '危险值应该回退');
+// 用户要求「不要小林那种救援卡了，全部换成和第 10 关一样」，
+// 所以现在所有关卡都没有救援目标。救援的底层代码保留，方便以后再用。
+test('所有关卡都没有救援目标', () => {
+  for (let id = 1; id <= 10; id += 1) {
+    const game = createGame(id, 42);
+    assert.equal(game.rescues.length, 0, `第 ${id} 关不该有救援目标`);
   }
-});
-
-test('救援成功会把状态置为 rescued', () => {
-  const game = createGame(1, 42);
-  const r = game.rescues[0]!;
-  // 直接构造一个「已消够」的状态
-  const almost = {
-    ...game,
-    rescues: [{ ...r, progress: r.needed - 1, danger: 0.9 }],
-  };
-  // 找一步消诈骗犯
-  const hint = findHint(almost.board);
-  if (!hint) return;
-  const { state: swapped } = trySwap(almost, hint.a, hint.b);
-  const { state } = resolveStep(swapped, createRng(swapped.seed));
-  if (state.clearedCount.pua > almost.clearedCount.pua) {
-    // 只要消到就应救出
-    assert.equal(state.rescues[0]!.status, 'rescued');
-    assert.ok(state.rescuedCount >= 1);
-  }
-});
-
-test('救援失败会削减星级上限', () => {
-  const game = createGame(1, 42);
-  const won = { ...game, phase: 'won' as const, score: 999999 };
-  // 没失败：三星
-  assert.equal(computeStars(won), 3);
-  // 失败一次：最多两星
-  assert.equal(computeStars({ ...won, rescuePenalty: 1 }), 2);
-  // 失败两次：最多一星
-  assert.equal(computeStars({ ...won, rescuePenalty: 2 }), 1);
 });
 
 // ---------------------------------------------------------------- 模式
@@ -588,21 +510,6 @@ test('解恨模式连锁上限更高', () => {
   assert.equal(catharsis.modeConfig.chainCap, 4);
   assert.ok(catharsis.modeConfig.sweepLimit > normal.modeConfig.sweepLimit);
   assert.equal(catharsis.modeConfig.penaltyOnRescueFail, false);
-});
-
-test('解恨模式救援计时更慢', () => {
-  const normal = createGame(1, 42, 'normal');
-  const catharsis = createGame(1, 42, 'catharsis');
-  const n = advanceRescue(normal, 10).rescues[0]!.danger;
-  const c = advanceRescue(catharsis, 10).rescues[0]!.danger;
-  assert.ok(c < n, `解恨模式危险值应更慢：${c} vs ${n}`);
-});
-
-test('解恨模式救援失败不扣评价', () => {
-  const catharsis = createGame(1, 42, 'catharsis');
-  const lost = advanceRescue(catharsis, 9999);
-  assert.equal(lost.lostCount, 1);
-  assert.equal(lost.rescuePenalty, 0, '解恨模式不该扣评价');
 });
 
 test('每个棋子都有视觉变体且不影响匹配', () => {
