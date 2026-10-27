@@ -33,7 +33,7 @@ export const LEVELS: LevelConfig[] = [
     ],
     rows: 7,
     cols: 7,
-    types: ['pua', 'overtime', 'grafter', 'shirk'],
+    types: ['pua', 'shirk', 'grafter', 'overtime', 'formalist', 'flatterer'],
     moves: 30,
     targetSequence: [
       { type: 'pua', need: 1 },
@@ -73,7 +73,7 @@ export const LEVELS: LevelConfig[] = [
     ],
     rows: 7,
     cols: 7,
-    types: ['pua', 'shirk', 'overtime', 'grafter'],
+    types: ['pua', 'shirk', 'grafter', 'overtime', 'formalist', 'flatterer'],
     moves: 34,
     targetSequence: [
       { type: 'pua', need: 1 },
@@ -121,7 +121,7 @@ export const LEVELS: LevelConfig[] = [
     ],
     rows: 7,
     cols: 7,
-    types: ['pua', 'shirk', 'overtime', 'formalist', 'grafter'],
+    types: ['pua', 'shirk', 'grafter', 'overtime', 'formalist', 'flatterer'],
     moves: 32,
     targetSequence: [
       { type: 'pua', need: 1 },
@@ -162,7 +162,7 @@ export const LEVELS: LevelConfig[] = [
     ],
     rows: 7,
     cols: 7,
-    types: ['pua', 'grafter', 'formalist', 'overtime'],
+    types: ['pua', 'shirk', 'grafter', 'overtime', 'formalist', 'flatterer'],
     moves: 32,
     targetSequence: [
       { type: 'grafter', need: 1 },
@@ -204,7 +204,7 @@ export const LEVELS: LevelConfig[] = [
     ],
     rows: 8,
     cols: 7,
-    types: ['pua', 'shirk', 'overtime', 'formalist', 'grafter'],
+    types: ['pua', 'shirk', 'grafter', 'overtime', 'formalist', 'flatterer'],
     moves: 32,
     targetSequence: [
       { type: 'pua', need: 1 },
@@ -254,7 +254,7 @@ export const LEVELS: LevelConfig[] = [
     ],
     rows: 8,
     cols: 7,
-    types: ['shirk', 'grafter', 'formalist', 'overtime', 'pua'],
+    types: ['pua', 'shirk', 'grafter', 'overtime', 'formalist', 'flatterer'],
     moves: 36,
     targetSequence: [
       { type: 'overtime', need: 1 },
@@ -289,7 +289,7 @@ export const LEVELS: LevelConfig[] = [
     ],
     rows: 8,
     cols: 8,
-    types: ['shirk', 'formalist', 'grafter', 'overtime', 'pua'],
+    types: ['pua', 'shirk', 'grafter', 'overtime', 'formalist', 'flatterer'],
     moves: 38,
     targetSequence: [
       { type: 'grafter', need: 1 },
@@ -324,7 +324,7 @@ export const LEVELS: LevelConfig[] = [
     ],
     rows: 8,
     cols: 8,
-    types: ['pua', 'shirk', 'grafter', 'formalist', 'overtime'],
+    types: ['pua', 'shirk', 'grafter', 'overtime', 'formalist', 'flatterer'],
     moves: 38,
     targetSequence: [
       { type: 'formalist', need: 1 },
@@ -360,7 +360,7 @@ export const LEVELS: LevelConfig[] = [
     ],
     rows: 8,
     cols: 8,
-    types: ['shirk', 'formalist', 'grafter', 'overtime', 'pua'],
+    types: ['pua', 'shirk', 'grafter', 'overtime', 'formalist', 'flatterer'],
     moves: 36,
     targetSequence: [
       { type: 'pua', need: 1 },
@@ -396,7 +396,7 @@ export const LEVELS: LevelConfig[] = [
     ],
     rows: 8,
     cols: 8,
-    types: ['pua', 'shirk', 'grafter', 'overtime', 'formalist'],
+    types: ['pua', 'shirk', 'grafter', 'overtime', 'formalist', 'flatterer'],
     moves: 42,
     targetSequence: [
       { type: 'pua', need: 2 },

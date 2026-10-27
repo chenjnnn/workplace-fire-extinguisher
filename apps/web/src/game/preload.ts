@@ -432,16 +432,41 @@ export function drawTileSprite(
   }
 
   // ---- 毒雾（甩锅侠甩出的锅）
+  /**
+   * 毒雾标记 —— **绝不改变底色**。
+   *
+   * 之前是在整个头像上盖一层绿色（rgba(101,163,13,.4)），
+   * 结果每个中毒的领导都变成了绿色，和「绿色甩锅侠」撞在一起，
+   * 棋盘上看起来像多了好几种颜色。
+   *
+   * 现在改成：只加一圈深色内描边 + 右下角一个小「锁」标，
+   * 底色完全不动 —— 玩家靠底色认角色，靠描边认状态。
+   */
   if (poisoned) {
     ctx.save();
-    circle(ctx, cx, cy, r);
-    ctx.clip();
-    ctx.fillStyle = 'rgba(101, 163, 13, 0.4)';
-    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-    ctx.fillStyle = 'rgba(63, 98, 18, 0.6)';
-    circle(ctx, cx, cy + r * 0.15, r * 0.4);
+    circle(ctx, cx, cy, r * 0.94);
+    ctx.strokeStyle = 'rgba(24, 24, 28, 0.72)';
+    ctx.lineWidth = size * 0.055;
+    ctx.setLineDash([size * 0.09, size * 0.07]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 右下角小锁标
+    const badgeR = size * 0.13;
+    const bx = cx + r * 0.62;
+    const by = cy + r * 0.62;
+    circle(ctx, bx, by, badgeR);
+    ctx.fillStyle = '#1f2937';
     ctx.fill();
-    ctx.fillRect(cx - r * 0.5, cy - r * 0.35, r * 0.22, r * 0.1);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = size * 0.018;
+    ctx.stroke();
+
+    // 锁孔
+    ctx.fillStyle = '#ffffff';
+    circle(ctx, bx, by - badgeR * 0.12, badgeR * 0.24);
+    ctx.fill();
+    ctx.fillRect(bx - badgeR * 0.08, by, badgeR * 0.16, badgeR * 0.42);
     ctx.restore();
   }
 
