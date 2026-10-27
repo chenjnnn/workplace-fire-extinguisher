@@ -433,40 +433,21 @@ export function drawTileSprite(
 
   // ---- 毒雾（甩锅侠甩出的锅）
   /**
-   * 毒雾标记 —— **绝不改变底色**。
+   * 中毒标记 —— 用户反馈「虚线框和右下角图标看不懂」，所以做得很克制：
+   * 只在头像内部加一圈很淡的暗色内阴影，不改底色、不加图标。
    *
-   * 之前是在整个头像上盖一层绿色（rgba(101,163,13,.4)），
-   * 结果每个中毒的领导都变成了绿色，和「绿色甩锅侠」撞在一起，
-   * 棋盘上看起来像多了好几种颜色。
-   *
-   * 现在改成：只加一圈深色内描边 + 右下角一个小「锁」标，
-   * 底色完全不动 —— 玩家靠底色认角色，靠描边认状态。
+   * 中毒的实际影响（要再消一次）会通过「没消掉」本身被玩家感知到，
+   * 不需要额外的视觉符号。
    */
   if (poisoned) {
     ctx.save();
-    circle(ctx, cx, cy, r * 0.94);
-    ctx.strokeStyle = 'rgba(24, 24, 28, 0.72)';
-    ctx.lineWidth = size * 0.055;
-    ctx.setLineDash([size * 0.09, size * 0.07]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // 右下角小锁标
-    const badgeR = size * 0.13;
-    const bx = cx + r * 0.62;
-    const by = cy + r * 0.62;
-    circle(ctx, bx, by, badgeR);
-    ctx.fillStyle = '#1f2937';
-    ctx.fill();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = size * 0.018;
-    ctx.stroke();
-
-    // 锁孔
-    ctx.fillStyle = '#ffffff';
-    circle(ctx, bx, by - badgeR * 0.12, badgeR * 0.24);
-    ctx.fill();
-    ctx.fillRect(bx - badgeR * 0.08, by, badgeR * 0.16, badgeR * 0.42);
+    circle(ctx, cx, cy, r);
+    ctx.clip();
+    const grad = ctx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.26)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
     ctx.restore();
   }
 

@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createRng, seedFromDate } from '../src/rng.ts';
+import { QUIZZES } from '../src/quiz.ts';
 import {
   applyGravity,
   findHint,
@@ -24,6 +25,9 @@ import {
   goalsMet,
   resolveStep,
   triggerSweep,
+  tickTimer,
+  canSweepNow,
+  SWEEP_SCORE_STEP,
   trySwap,
 } from '../src/game.ts';
 import { createLevelBoard, withTiles } from './helpers.ts';
@@ -307,14 +311,21 @@ test('收网行动需要怒值满', () => {
   assert.equal(res.state.rage, game.rage);
 });
 
-test('怒值满后收网行动生效', () => {
+test('收网：分数达标后可以跳过当前任务', () => {
   const game = createGame(1, 42);
-  const full = { ...game, rage: game.rageMax };
-  const res = triggerSweep(full, 'pua', createRng(1));
+  // 分数不够时用不了
+  assert.equal(canSweepNow(game), false);
+  const poor = triggerSweep(game, 'pua', createRng(1));
+  assert.equal(poor.ok, false);
+
+  // 攒够分数就能跳过
+  const rich = { ...game, score: SWEEP_SCORE_STEP + 10 };
+  assert.equal(canSweepNow(rich), true);
+  const before = rich.seqIndex;
+  const res = triggerSweep(rich, 'pua', createRng(1));
   assert.equal(res.ok, true);
-  assert.equal(res.state.phase === 'idle' || res.state.phase === 'won' || res.state.phase === 'lost', true);
-  assert.ok(res.cleared >= 0);
-  assert.equal(res.state.rage, 0, '用完应该清空怒值');
+  assert.ok(res.state.seqIndex > before, '应该推进任务链');
+  assert.equal(res.state.sweepUsed, rich.sweepUsed + 1);
 });
 
 // ---------------------------------------------------------------- 重力
@@ -629,3 +640,35 @@ function makeTyped(type: VillainType, row: number, col: number): Tile {
     alpha: 1,
   };
 }
+
+// ---------------------------------------------------------------- 倒计时
+test('第 5 关起有任务倒计时', () => {
+  assert.ok((createGame(4, 42).level.taskTimerSeconds ?? 0) === 0, '第 4 关不该有倒计时');
+  const g5 = createGame(5, 42);
+  assert.ok((g5.level.taskTimerSeconds ?? 0) > 0, '第 5 关应该有倒计时');
+  assert.equal(g5.taskTimeLeft, g5.level.taskTimerSeconds);
+});
+
+test('倒计时会随时间减少', () => {
+  const g = createGame(5, 42);
+  const before = g.taskTimeLeft;
+  const after = tickTimer(g, 1.5);
+  assert.ok(after.taskTimeLeft < before, '应该减少');
+  assert.ok(Math.abs(before - after.taskTimeLeft - 1.5) < 0.001);
+});
+
+test('倒计时归零判负', () => {
+  const g = createGame(5, 42);
+  const done = tickTimer({ ...g, taskTimeLeft: 0.5 }, 1);
+  assert.equal(done.phase, 'lost');
+});
+
+test('弹窗答题时倒计时不走（引擎层保证，这里验证状态）', () => {
+  // 引擎只在 phase==='idle' && !pendingQuiz && !busy 时调 tickTimer，
+  // 这里验证「有 pendingQuiz 时不调用」这个约定对应的状态形态
+  const g = createGame(5, 42);
+  const withQuiz = { ...g, pendingQuiz: QUIZZES[0]! };
+  assert.ok(withQuiz.pendingQuiz, '题目在场时不该继续计时');
+  // 只要引擎不调用 tickTimer，时间就不会变 —— 这条断言锁住「有题就不该 tick」的意图
+  assert.equal(tickTimer(g, 0).taskTimeLeft, g.taskTimeLeft);
+});

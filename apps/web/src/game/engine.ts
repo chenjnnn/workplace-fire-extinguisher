@@ -18,6 +18,9 @@ import {
   findHint,
   getCell,
   sequenceProgress,
+  canSweepNow,
+  sweepEarned,
+  SWEEP_SCORE_STEP,
   tickTimer,
   addTime,
   skipCurrentTarget,
@@ -78,6 +81,10 @@ export interface HudSnapshot {
   stars: number;
   seed: number;
   canSweep: boolean;
+  /** 下一次收网需要的分数 */
+  sweepNextScore: number;
+  /** 已经攒到几次收网机会 */
+  sweepEarnedCount: number;
   mode: GameMode;
   modeName: string;
   rescues: Array<{
@@ -366,7 +373,37 @@ export class GameEngine {
     this.busy = false;
     this.comboDisplay = null;
     this.syncAllPositions();
+
+    /**
+     * 重算画布尺寸。
+     *
+     * 结算页会盖住棋盘，回来时 canvas 的容器尺寸可能是 0
+     * （实测重开后 canvas 变成 36×36，整个棋盘看不见）。
+     *
+     * 注意：restart 是结算页按钮触发的，此刻 React 还没把结算页撤掉，
+     * 直接量会量到旧尺寸。所以延后两帧再量 —— 等 DOM 真正切回游戏视图。
+     */
+    this.scheduleRelayout();
     this.emitHud();
+  }
+
+  /** 延后重算布局（等 React 把结算页撤掉、容器恢复真实尺寸） */
+  private scheduleRelayout(): void {
+    const redo = () => {
+      this.resizeCanvas();
+      this.syncAllPositions();
+    };
+    requestAnimationFrame(() => {
+      redo();
+      requestAnimationFrame(redo);
+    });
+    // 再兜一次：有些浏览器首帧时容器还没完成回流
+    setTimeout(redo, 120);
+  }
+
+  /** 供外部强制重算（比如从结算页返回时） */
+  relayout(): void {
+    this.scheduleRelayout();
   }
 
   setAvatar(avatar: AvatarConfig | null): void {
@@ -375,56 +412,17 @@ export class GameEngine {
 
   /** 玩家点「收网行动」 */
   sweep(): boolean {
-    if (this.busy || this.state.phase !== 'idle') return false;
-    if (this.state.rage < this.state.rageMax) return false;
-
-    // 选棋盘上最多的一种类型来清
-    const counts = new Map<VillainType, number>();
-    for (const row of this.state.board) {
-      for (const cell of row) {
-        if (cell) counts.set(cell.type, (counts.get(cell.type) ?? 0) + 1);
-      }
-    }
-    let best: VillainType = 'pua';
-    let bestCount = -1;
-    for (const [type, count] of counts) {
-      if (count > bestCount) {
-        best = type;
-        bestCount = count;
-      }
-    }
-
-    const result = triggerSweep(this.state, best, this.rng);
+    if (this.busy) return false;
+    const result = triggerSweep(this.state, this.state.level.targetChain[0] ?? 'pua', this.rng);
     if (!result.ok) return false;
 
+    const skippedColor = this.state.level.targetChain[this.state.seqIndex] ?? null;
     this.state = result.state;
     this.busy = true;
-    this.hint = null;
 
-    sound.play('sweep');
-    this.shake = 14;
-    this.flash = 1;
-    this.flashColor = VILLAINS[best].color;
-
-    // 全屏粒子
-    for (let i = 0; i < 80; i += 1) {
-      this.spawnParticle(
-        this.layout.width * Math.random(),
-        this.layout.height * Math.random(),
-        VILLAINS[best].color,
-        1.2,
-      );
+    if (skippedColor) {
+      this.addFloat(this.layout.width / 2, this.layout.height * 0.32, '跳过！', VILLAINS[skippedColor].color, 26, true);
     }
-
-    this.addFloat(
-      this.layout.width / 2,
-      this.layout.height * 0.36,
-      '收网行动！',
-      VILLAINS[best].color,
-      30,
-      true,
-    );
-
     this.syncAllPositions();
     this.emitHud();
 
@@ -432,12 +430,11 @@ export class GameEngine {
       this.syncAllPositions();
       this.busy = false;
       this.afterSettle();
-    }, 480);
+    }, 420);
 
     return true;
   }
 
-  // ------------------------------------------------------------ 尺寸
   private attachResize(): void {
     const onResize = () => this.resizeCanvas();
     window.addEventListener('resize', onResize);
@@ -1108,7 +1105,13 @@ export class GameEngine {
      * 用真实时间推进 —— 暂停时 engine.pause() 会停掉整个循环，所以自然冻结。
      * HUD 只在「整秒变化」时刷新，避免每帧 setState 拖慢 React。
      */
-    if (this.state.phase === 'idle') {
+    /**
+     * 倒计时只在「真正能操作」的时候走。
+     *
+     * 用户的要求：「当做题中任务弹出来的时候，时间需要暂停，题目做完后再继续计时」。
+     * 所以除了 idle，还要排除 pendingQuiz（弹窗打开）和 busy（动画中）。
+     */
+    if (this.state.phase === 'idle' && !this.state.pendingQuiz && !this.busy) {
       const before = this.state.taskTimeLeft + this.state.levelTimeLeft;
       const ticked = tickTimer(this.state, dt);
       if (ticked !== this.state) {
@@ -1460,14 +1463,20 @@ export class GameEngine {
      * 顺序囚车最关键的是「现在该抓什么」，如果只在顶部面板标出来，
      * 玩家的视线在棋盘上时根本注意不到。所以直接把提示放到棋盘上。
      */
+    /**
+     * 当前目标色的提示。
+     *
+     * 之前是粗描边 + 高不透明度，棋子上出现十几个蓝色圆环，非常吵。
+     * 现在改成「贴边细线 + 低透明度」：能扫到，但不抢戏。
+     */
     const target = currentTarget(this.state);
     if (target && target === tile.type && tile.state === 'idle') {
-      const pulse = 0.55 + 0.45 * Math.sin(this.time * 5);
+      const pulse = 0.3 + 0.3 * Math.sin(this.time * 4);
       ctx.save();
-      ctx.globalAlpha = pulse * 0.85;
-      ctx.strokeStyle = VILLAINS[tile.type].color;
-      ctx.lineWidth = Math.max(2.5, cell * 0.075);
-      roundRect(ctx, x - cell / 2 + 3, y - cell / 2 + 3, cell - 6, cell - 6, cell * 0.28);
+      ctx.globalAlpha = pulse;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = Math.max(1.5, cell * 0.035);
+      roundRect(ctx, x - cell / 2 + 5, y - cell / 2 + 5, cell - 10, cell - 10, cell * 0.3);
       ctx.stroke();
       ctx.restore();
     }
@@ -1542,7 +1551,9 @@ export class GameEngine {
       totalCleared: s.totalCleared,
       stars: computeStars(s),
       seed: s.seed,
-      canSweep: s.rage >= s.rageMax && s.phase === 'idle' && s.sweepUsed < s.modeConfig.sweepLimit,
+      canSweep: canSweepNow(s),
+      sweepNextScore: SWEEP_SCORE_STEP * (sweepEarned(s) + 1),
+      sweepEarnedCount: sweepEarned(s),
       mode: s.mode,
       modeName: s.modeConfig.name,
       sweepUsed: s.sweepUsed,

@@ -160,10 +160,10 @@ export function PrisonVan({ sequence, skipsLeft, onSkip, canSweep, sweepLeft, on
             backgroundColor: sweepUsable ? '#ff6b4a' : '#f0e8dc',
             color: sweepUsable ? '#ffffff' : '#b8a892',
           }}
-          aria-label="收网行动"
+          aria-label="跳过当前目标"
         >
-          <span className="text-[22px] leading-none">🚨</span>
-          <span className="text-[10px] font-bold leading-none">{sweepUsable ? '收网' : '未满'}</span>
+          <span className="text-[22px] leading-none">{sweepUsable ? '🚨' : '🔒'}</span>
+          <span className="text-[10px] font-bold leading-none">{sweepUsable ? '跳过' : '攒分中'}</span>
           {sweepLeft > 0 && (
             <span
               className="absolute right-1 top-1 rounded-full px-1 text-[8px] leading-none"

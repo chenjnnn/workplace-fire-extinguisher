@@ -194,6 +194,32 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
   }, [toast]);
 
 
+  /**
+   * 结算页撤掉后，棋盘容器才恢复真实尺寸 —— 这时候必须重算一次画布。
+   *
+   * 之前只在 engine.restart() 里量尺寸，但那是结算页按钮触发的，
+   * 此刻结算页还盖着、容器高度是 0，结果 canvas 退回默认的 300×150，
+   * 玩家看到「上面有任务、下面没有格子」。
+   * 这里等两帧 + 一个 timeout，保证 DOM 已经切回游戏视图。
+   */
+  useEffect(() => {
+    if (finished) return;
+    const engine = engineRef.current;
+    if (!engine) return;
+
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => engine.relayout());
+    });
+    const timer = window.setTimeout(() => engine.relayout(), 160);
+
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      clearTimeout(timer);
+    };
+  }, [finished]);
+
   // 结算页内容很长，需要能滚动 —— 解除「禁止滚动」的锁
   useEffect(() => {
     if (!finished) return;
@@ -234,19 +260,6 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
     );
   }
 
-  if (finished) {
-    return (
-      <main className="mx-auto flex h-[100dvh] w-full max-w-md flex-col">
-        <ResultOverlay
-          state={finished}
-          share={share}
-          levelId={levelId}
-          onRestart={restart}
-        />
-      </main>
-    );
-  }
-
   // 开场动画：领导入场 → 说一句话 → 任务浮现 → 开打
   if (!briefed) {
     return <SceneIntro level={level} scene={scene} onStart={() => setBriefed(true)} />;
@@ -256,7 +269,24 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
   const showQuiz = quiz !== null;
 
   return (
-    <main className="mx-auto flex h-[100dvh] w-full max-w-md flex-col bg-[#fff8ec] px-3 pb-2 pt-2">
+    <main className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col bg-[#fff8ec] px-3 pb-2 pt-2">
+      {/*
+        结算页用「叠层」而不是「替换」。
+        之前是 early return，结算时整个游戏视图（包括 canvas 元素）被卸载，
+        而引擎还绑在旧 canvas 上 —— 点「重玩」后 React 建了一个新 canvas，
+        引擎却不知道，结果棋盘停在默认的 300×150，玩家看到「上面有任务、下面没格子」。
+      */}
+      {finished && (
+        <div className="absolute inset-0 z-40">
+          <ResultOverlay
+            state={finished}
+            share={share}
+            levelId={levelId}
+            onRestart={restart}
+          />
+        </div>
+      )}
+
       {showQuiz && (
         <QuizModal
           prompt={quiz.prompt}
@@ -429,29 +459,31 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
             {hud?.movesLeft ?? 0}
           </p>
         </div>
-        {/* 怒值：纯显示。真正的「收网」按钮在囚车旁边的警笛上 */}
+        {/* 跳过进度：攒够分数就能跳过当前这一格（按钮在囚车右边） */}
         <div className="flex flex-1 flex-col justify-center rounded-xl bg-white px-3 py-2">
           <div className="flex items-baseline justify-between">
-            <p className="text-[10px] text-[#b8a892]">怒值</p>
+            <p className="text-[10px] text-[#b8a892]">跳过进度</p>
             <p
-              className="font-num text-[11px] leading-none"
+              className="font-num text-[10px] leading-none"
               style={{ color: hud?.canSweep ? '#f97316' : '#b8a892' }}
             >
-              {Math.round(((hud?.rage ?? 0) / (hud?.rageMax || 100)) * 100)}%
+              {hud?.canSweep
+                ? '可用！'
+                : `${(hud?.score ?? 0) - (hud?.sweepEarnedCount ?? 0) * 2500}/${2500}`}
             </p>
           </div>
           <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#f0e4d4]">
             <div
               className="h-full rounded-full transition-all duration-300"
               style={{
-                width: `${Math.min(100, ((hud?.rage ?? 0) / (hud?.rageMax || 100)) * 100)}%`,
+                width: `${hud?.canSweep ? 100 : Math.min(100, Math.max(0, ((hud?.score ?? 0) - (hud?.sweepEarnedCount ?? 0) * 2500) / 25))}%`,
                 backgroundColor: hud?.canSweep ? '#ff6b4a' : '#ffc93c',
               }}
             />
           </div>
           {hud?.canSweep && (
             <p className="mt-1 text-[9px] font-bold leading-none text-[#f97316]">
-              怒值已满 · 可以收网
+              点右边 🚨 跳过这一格
             </p>
           )}
         </div>

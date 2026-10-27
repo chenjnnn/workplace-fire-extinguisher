@@ -1139,100 +1139,60 @@ function shuffleBoard(board: Board, level: LevelConfig, rng: Rng): Board {
  *   · 清全盘太强，玩家会攒着不放，失去节奏感
  *   · 清一类需要玩家判断「哪类最多/最想清」，才有决策乐趣
  */
-export function triggerSweep(
-  state: GameState,
-  type: VillainType,
-  rng: Rng,
-): { state: GameState; ok: boolean; cleared: number } {
-  if (state.phase !== 'idle') return { state, ok: false, cleared: 0 };
-  if (state.rage < state.rageMax) return { state, ok: false, cleared: 0 };
-  // 模式限定收网次数（解恨模式是 Infinity）
-  if (state.sweepUsed >= state.modeConfig.sweepLimit) return { state, ok: false, cleared: 0 };
+/**
+ * 收网 —— 现在是「分数达标后跳过当前任务」。
+ *
+ * 用户的要求：「当分数超过多少时能够激活收网，激活后随时点击收网，
+ * 就能跳过当前这个颜色的任务，视为这个任务已完成」。
+ *
+ * 所以它不再清棋盘，而是直接推进任务链一格 ——
+ * 本质是「用分数换一次跳过」，用来解开卡在某个颜色的局面。
+ */
+export const SWEEP_SCORE_STEP = 2500;
 
-  const coords: Coord[] = [];
-  for (let r = 0; r < state.board.length; r += 1) {
-    for (let c = 0; c < (state.board[r]?.length ?? 0); c += 1) {
-      const cell = getCell(state.board, r, c);
-      if (cell && cell.type === type) coords.push({ row: r, col: c });
-    }
-  }
-
-  if (coords.length === 0) return { state, ok: false, cleared: 0 };
-
-  const outcome = clearMatches(state.board, coords, 1, 0, state.modeConfig.chainCap);
-  let board = removeCleared(outcome.board, outcome.cleared);
-
-  const dropStarts = new Map<Tile, number>();
-  for (let r = 0; r < board.length; r += 1) {
-    for (let c = 0; c < (board[r]?.length ?? 0); c += 1) {
-      const tile = getCell(board, r, c);
-      if (tile) dropStarts.set(tile, tile.viewRow);
-    }
-  }
-
-  const gravity = applyGravity(board);
-  board = gravity.board;
-  board = refillBoard(board, state.level, rng);
-
-  for (let r = 0; r < board.length; r += 1) {
-    for (let c = 0; c < (board[r]?.length ?? 0); c += 1) {
-      const tile = getCell(board, r, c);
-      if (!tile) continue;
-      const startRow = dropStarts.get(tile);
-      if (startRow !== undefined) tile.dropFromRow = startRow;
-    }
-  }
-
-  for (let r = 0; r < board.length; r += 1) {
-    for (let c = 0; c < (board[r]?.length ?? 0); c += 1) {
-      const cell = getCell(board, r, c);
-      if (cell) cell.state = 'idle';
-    }
-  }
-
-  const clearedCount = { ...state.clearedCount };
-  for (const [t, count] of Object.entries(outcome.counts)) {
-    const key = t as VillainType;
-    clearedCount[key] = (clearedCount[key] ?? 0) + (count ?? 0);
-  }
-
-  const rescueAfterSweep = feedRescue(state, outcome.counts);
-
-  let next: GameState = {
-    ...state,
-    board,
-    score: state.score + Math.round(outcome.score * 1.5),
-    rage: 0,
-    clearedCount,
-    rescues: rescueAfterSweep.rescues,
-    rescuedCount: rescueAfterSweep.rescuedCount,
-    lostCount: rescueAfterSweep.lostCount,
-    rescuePenalty: rescueAfterSweep.rescuePenalty,
-    totalCleared: state.totalCleared + outcome.cleared.length,
-    sweepUsed: state.sweepUsed + 1,
-    events: [
-      {
-        chain: 1,
-        cleared: outcome.cleared.length,
-        points: Math.round(outcome.score * 1.5),
-        label: '收网行动',
-        cells: outcome.cleared,
-        type,
-        move: 0,
-      },
-    ],
-    hint: null,
-    phase: 'idle',
-  };
-
-  if (goalsMet(next)) next = { ...next, phase: 'won' };
-  else if (next.movesLeft <= 0) next = { ...next, phase: 'lost' };
-
-  return { state: next, ok: true, cleared: outcome.cleared.length };
+/** 按分数算，一共能收网几次 */
+export function sweepEarned(state: GameState): number {
+  return Math.floor(state.score / SWEEP_SCORE_STEP);
 }
 
-// ---------------------------------------------------------------- 辅助
-/** 当前救援目标（界面用） */
+/** 现在能不能收网 */
+export function canSweepNow(state: GameState): boolean {
+  if (state.phase !== 'idle') return false;
+  if (state.seqIndex >= state.level.targetChain.length) return false;
+  return sweepEarned(state) > state.sweepUsed;
+}
+
+export function triggerSweep(
+  state: GameState,
+  _type: VillainType,
+  _rng: Rng,
+): { state: GameState; ok: boolean; cleared: number } {
+  if (!canSweepNow(state)) return { state, ok: false, cleared: 0 };
+
+  // 跳过当前这一格：视为已完成
+  const skipped = state.level.targetChain[state.seqIndex] ?? null;
+  let seqIndex = state.seqIndex + 1;
+  const chain = state.level.targetChain;
+  while (seqIndex < chain.length && chain[seqIndex] === skipped) seqIndex += 1;
+
+  const next: GameState = {
+    ...state,
+    seqIndex,
+    seqProgress: 0,
+    sweepUsed: state.sweepUsed + 1,
+  };
+
+  // 如果这一跳正好让链走完，就直接判通关
+  if (seqIndex >= chain.length) {
+    return {
+      state: { ...next, phase: 'won', score: next.score + next.movesLeft * 100 },
+      ok: true,
+      cleared: 0,
+    };
+  }
+  return { state: next, ok: true, cleared: 0 };
+}
+
 export function activeRescues(state: GameState) {
   return state.rescues;
 }
