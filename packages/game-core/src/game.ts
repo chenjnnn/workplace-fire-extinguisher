@@ -174,6 +174,8 @@ export function createGame(levelId: number, seed?: number, mode: GameMode = 'nor
     seqIndex: 0,
     seqProgress: 0,
     offTargetCleared: 0,
+    sweepScore: 0,
+    offTargetStreak: 0,
     skipsUsed: 0,
     rescuedCount: 0,
     lostCount: 0,
@@ -585,6 +587,10 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
   let seqIndex = state.seqIndex;
   let seqProgress = state.seqProgress;
   let offTargetCleared = state.offTargetCleared;
+  let sweepScore = state.sweepScore;
+  let offTargetStreak = state.offTargetStreak;
+  // 这一手的得分（在循环里按 chain 累加，用于决定收网积分）
+  let gainedThisMove = 0;
   let totalCleared = 0;
   let rescueState = state;
   let hadMatch = false;
@@ -609,6 +615,8 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     score -= Math.round(outcome.overtimePenalty * VILLAINS.overtime.baseScore);
     events.push(...outcome.events);
     totalCleared += outcome.cleared.length;
+    // 这一手（含连锁）累计的得分，用来决定要不要计入收网进度
+    gainedThisMove += outcome.score;
 
     for (const [type, count] of Object.entries(outcome.counts)) {
       const key = type as VillainType;
@@ -629,8 +637,24 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
           seqIndex += 1;
         }
         seqProgress = 0;
+        // 完成任务：连消计数清零，这一手的分数照常计入收网进度
+        offTargetStreak = 0;
+        sweepScore += gainedThisMove;
       } else {
         offTargetCleared += count ?? 0;
+        offTargetStreak += 1;
+
+        /**
+         * 收网积分规则：
+         *   'score'   —— 只要分数涨就算攒（前 10 关）
+         *   'limited' —— 只认「完成任务前 3 次非目标消除」的分；
+         *                第 4 次起分数照常涨，但不进收网进度，
+         *                这样「一直消别的颜色攒跳过、把任务全跳过去」就不成立了。
+         */
+        const mode = state.level.sweepMode ?? 'score';
+        if (mode === 'score' || offTargetStreak <= 3) {
+          sweepScore += gainedThisMove;
+        }
       }
     }
 
@@ -700,6 +724,8 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
         ? state.level.taskTimerSeconds
         : state.taskTimeLeft,
     levelTimeLeft: state.levelTimeLeft,
+    sweepScore,
+    offTargetStreak,
     // 囚车（按颜色顺序）的进度
     seqIndex,
     seqProgress,
@@ -1159,8 +1185,9 @@ export function sweepThresholdsOf(state: GameState): [number, number] {
 /** 按分数算，一共攒到几次收网机会（0/1/2） */
 export function sweepEarned(state: GameState): number {
   const [a, b] = sweepThresholdsOf(state);
-  if (state.score >= b) return 2;
-  if (state.score >= a) return 1;
+  const s = state.sweepScore;
+  if (s >= b) return 2;
+  if (s >= a) return 1;
   return 0;
 }
 
@@ -1181,7 +1208,7 @@ export function sweepProgress(state: GameState): { from: number; to: number; rat
   const from = used === 0 ? 0 : used === 1 ? a : b;
   const to = used === 0 ? a : b;
   if (to <= from) return { from, to, ratio: 1 };
-  return { from, to, ratio: Math.min(1, Math.max(0, (state.score - from) / (to - from))) };
+  return { from, to, ratio: Math.min(1, Math.max(0, (state.sweepScore - from) / (to - from))) };
 }
 
 export function triggerSweep(

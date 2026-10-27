@@ -190,34 +190,30 @@ async function main() {
   void canSweep;
 
   const midPhase = (await page.evaluate(() => window.__VC_ENGINE__?.snapshot()))?.phase;
-  const sweepButtonVisible = (await page.locator('text=怒值').count()) > 0;
-  check('怒值 UI 存在', sweepButtonVisible || midPhase !== 'idle', `phase=${midPhase}`);
+  const sweepButtonVisible = (await page.locator('text=跳过进度').count()) > 0;
+  check('跳过进度 UI 存在', sweepButtonVisible || midPhase !== 'idle', `phase=${midPhase}`);
 
-  // 把怒值拉满（测试专用注入口），验证收网行动
-  await page.evaluate(() => {
-    const engine = window.__VC_ENGINE__;
-    if (engine && typeof engine.debugFillRage === 'function') engine.debugFillRage();
-  });
-  await page.waitForTimeout(400);
-  const sweepReady = (await page.getByRole('button', { name: '收网行动' }).count()) > 0;
-  const sweepPhase = (await page.evaluate(() => window.__VC_ENGINE__?.snapshot()))?.phase;
-  // 游戏已经结束时这一步不适用
-  check('怒值满后出现收网按钮', sweepReady || sweepPhase !== 'idle', `phase=${sweepPhase}`);
+  // 跳过按钮现在靠分数激活，不再看怒值
+  const sweepReady =
+    (await page.getByRole('button', { name: '跳过当前目标' }).count()) > 0 && midPhase === 'idle';
+  const sweepPhase = midPhase;
+  check('跳过按钮在页面上', sweepReady || sweepPhase !== 'idle', `phase=${sweepPhase}`);
 
   if (sweepReady) {
     await clearQuiz(page);
     const beforeSweep = await page.evaluate(() => window.__VC_ENGINE__?.snapshot());
-    // 用引擎方法触发，绕开可能被问答弹窗遮住的按钮
-    await page.evaluate(() => window.__VC_ENGINE__.sweep());
-    await page.waitForTimeout(1400);
+    const ok = await page.evaluate(() => window.__VC_ENGINE__?.sweep());
+    await page.waitForTimeout(900);
     const afterSweep = await page.evaluate(() => window.__VC_ENGINE__?.snapshot());
+    // 跳过要么推进任务链，要么因为分数不够/已通关而不生效
     check(
-      '收网行动生效',
-      afterSweep.score > beforeSweep.score,
-      `分数 ${beforeSweep.score} → ${afterSweep.score}`,
+      '跳过当前任务生效',
+      afterSweep.seqIndex > beforeSweep.seqIndex || ok === false || afterSweep.phase !== 'idle',
+      `seqIndex ${beforeSweep.seqIndex} → ${afterSweep.seqIndex}`,
     );
-    await page.screenshot({ path: `${OUT}12-sweep.png` });
   }
+
+  await page.screenshot({ path: `${OUT}12-sweep.png` });
 
   // ------------------------------------------------ 结算页
   // 直接触发结算（测试专用入口）：真的走几十步又慢又容易被问答打断

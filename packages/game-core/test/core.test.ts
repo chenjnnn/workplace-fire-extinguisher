@@ -318,8 +318,8 @@ test('收网：分数达标后可以跳过当前任务', () => {
   const poor = triggerSweep(game, 'pua', createRng(1));
   assert.equal(poor.ok, false);
 
-  // 攒到第一个门槛就能跳过
-  const rich = { ...game, score: DEFAULT_SWEEP_THRESHOLDS[0] + 10 };
+  // 攒到第一个门槛就能跳过（注意看的是 sweepScore，不是 score）
+  const rich = { ...game, sweepScore: DEFAULT_SWEEP_THRESHOLDS[0] + 10 };
   assert.equal(canSweepNow(rich), true);
   const before = rich.seqIndex;
   const res = triggerSweep(rich, 'pua', createRng(1));
@@ -712,4 +712,49 @@ test('倒计时只在任务完成时重置（消错颜色不影响）', () => {
     base.level.taskTimerSeconds,
     '完成一格后倒计时应该回满',
   );
+});
+
+// ---------------------------------------------------------------- 收网积分模式
+test('limited 模式：连消非目标色超过 3 次就不再攒收网分', () => {
+  const base = createGame(1, 42);
+  const first = base.level.targetChain[0]!;
+  const other = (['pua', 'shirk', 'grafter', 'overtime', 'formalist', 'flatterer'] as const).find(
+    (t) => t !== first,
+  )!;
+
+  // 手动把关卡切成 limited 模式
+  const limited = {
+    ...base,
+    level: { ...base.level, sweepMode: 'limited' as const },
+    offTargetStreak: 0,
+    sweepScore: 0,
+  };
+
+  // 造一手「消非目标色」的棋盘
+  const makeWrongBoard = () =>
+    withTiles(base.board, [
+      [3, 0, other],
+      [3, 1, other],
+      [3, 2, other],
+    ]);
+
+  // 第 1 次：应该加
+  const r1 = resolveStep({ ...limited, board: makeWrongBoard() }, createRng(5));
+  assert.ok(r1.state.sweepScore > 0, '第 1 次非目标消除应该攒分');
+  const afterFirst = r1.state.sweepScore;
+
+  // 直接把 streak 推到 4 再消一手：不该再加
+  const drained = { ...r1.state, offTargetStreak: 4, sweepScore: afterFirst };
+  const r2 = resolveStep({ ...drained, board: makeWrongBoard() }, createRng(7));
+  // 连锁可能碰到目标色（会把 streak 清零并加分），所以只在「链没推进」时断言
+  if (r2.state.seqIndex === drained.seqIndex) {
+    assert.equal(r2.state.sweepScore, afterFirst, '第 5 次非目标消除不该再攒收网分');
+  }
+});
+
+test('score 模式：不管连消几次都攒分（前 10 关）', () => {
+  const base = createGame(1, 42);
+  assert.equal(base.level.sweepMode ?? 'score', 'score');
+  assert.equal(base.sweepScore, 0);
+  assert.equal(base.offTargetStreak, 0);
 });

@@ -316,6 +316,14 @@ export interface LevelConfig {
   minScore: number;
   starScores: [number, number, number];
   /**
+   * 收网积分的计算方式。
+   *
+   * 'score'    —— 只要分数涨就算攒（第 1-10 关）
+   * 'limited'  —— 只有「完成任务前 3 次非目标消除」的分数才算攒
+   *               （第 11 关起，防止玩家靠一直消别的颜色刷收网、跳过全部任务）
+   */
+  sweepMode?: 'score' | 'limited';
+  /**
    * 收网的激活分数（两次）。
    *
    * 用户的要求：「设计一个分数，完成多少分之后第一次激活，完成多少分之后第二次激活」。
@@ -440,6 +448,15 @@ export interface GameState {
   seqProgress: number;
   /** 非目标色消除的累计数（每满 5 个可以「跳过当前目标」） */
   offTargetCleared: number;
+  /**
+   * 用于收网积分的分数。
+   *
+   * 和 score 分开：limited 模式下，连续消非目标色超过 3 次后，
+   * 分数照常涨，但**不再计入这里** —— 这样就没法靠刷无关颜色攒跳过了。
+   */
+  sweepScore: number;
+  /** 当前任务期间，已经连续消了几次非目标色（完成任务时清零） */
+  offTargetStreak: number;
   /** 已经跳过了几次 */
   skipsUsed: number;
   /** 整局累计的救援结果，给结算页用 */
