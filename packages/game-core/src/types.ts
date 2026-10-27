@@ -323,6 +323,20 @@ export interface LevelConfig {
   /** 过关最低分数（星级线依次为 minScore / 2星线 / 3星线） */
   minScore: number;
   starScores: [number, number, number];
+  /**
+   * 每个囚车间隔的倒计时（秒）。不填 = 这一关没有任务倒计时。
+   *
+   * 每抓完一个隔间会重置。倒计时归零 = 这个领导跑了 = 整关失败。
+   * 用于第 5-10 关：逼玩家在「等一下更好的机会」和「现在就动手」之间选。
+   */
+  taskTimerSeconds?: number;
+  /**
+   * 整关倒计时（秒）。不填 = 没有整关倒计时。
+   *
+   * 和 taskTimerSeconds 互斥（同时填时以整关倒计时为准）。
+   * 用于第 10 关之后的关卡。
+   */
+  levelTimerSeconds?: number;
   /** 特殊规则 */
   rules?: {
     /** 每 N 步，随机一格变成毒雾 */
@@ -417,6 +431,10 @@ export interface GameState {
   pendingQuiz: import('./quiz.ts').Quiz | null;
   /** 已经答过多少题（用于判断下一次该不该弹） */
   quizzesTaken: number;
+  /** 当前隔间的剩余秒数（0 = 没有任务倒计时） */
+  taskTimeLeft: number;
+  /** 整关剩余秒数（0 = 没有整关倒计时） */
+  levelTimeLeft: number;
   /** 当前正在抓第几个隔间（0 开始） */
   seqIndex: number;
   /** 当前隔间已经抓了几只 */

@@ -18,6 +18,8 @@ import {
   findHint,
   getCell,
   sequenceProgress,
+  tickTimer,
+  addTime,
   skipCurrentTarget,
   currentTarget,
   goalsMet,
@@ -62,6 +64,14 @@ export interface HudSnapshot {
   targetType: VillainType | null;
   /** 非目标消除累计（每 5 个可跳过一格） */
   offTargetCleared: number;
+  /** 当前任务的剩余秒数（0 = 没有任务倒计时） */
+  taskTimeLeft: number;
+  /** 整关剩余秒数（0 = 没有整关倒计时） */
+  levelTimeLeft: number;
+  /** 任务倒计时的总时长（用来画进度条） */
+  taskTimeTotal: number;
+  /** 整关倒计时的总时长 */
+  levelTimeTotal: number;
   /** 还能跳过几次 */
   skipsLeft: number;
   combo: { label: string; chain: number; points: number } | null;
@@ -1094,6 +1104,23 @@ export class GameEngine {
   };
 
   private update(dt: number): void {
+    /**
+     * 倒计时（第 5 关起有）。
+     *
+     * 用真实时间推进 —— 暂停时 engine.pause() 会停掉整个循环，所以自然冻结。
+     * HUD 只在「整秒变化」时刷新，避免每帧 setState 拖慢 React。
+     */
+    if (this.state.phase === 'idle') {
+      const before = this.state.taskTimeLeft + this.state.levelTimeLeft;
+      const ticked = tickTimer(this.state, dt);
+      if (ticked !== this.state) {
+        this.state = ticked;
+        const after = this.state.taskTimeLeft + this.state.levelTimeLeft;
+        if (Math.ceil(before) !== Math.ceil(after)) this.emitHud();
+        if (this.state.phase === 'lost') this.options.onFinish?.(this.state);
+      }
+    }
+
     // 补间
     for (const [id, tween] of this.tweens) {
       tween.elapsed += dt * 1000;
@@ -1509,6 +1536,10 @@ export class GameEngine {
       })),
       targetType: target?.type ?? null,
       offTargetCleared: s.offTargetCleared,
+      taskTimeLeft: s.taskTimeLeft,
+      levelTimeLeft: s.levelTimeLeft,
+      taskTimeTotal: s.level.taskTimerSeconds ?? 0,
+      levelTimeTotal: s.level.levelTimerSeconds ?? 0,
       skipsLeft: Math.floor(s.offTargetCleared / 5) - s.skipsUsed,
       combo: this.comboDisplay,
       maxChain: s.maxChain,
@@ -1580,6 +1611,8 @@ export class GameEngine {
       seqIndex: this.state.seqIndex,
       seqProgress: this.state.seqProgress,
       offTargetCleared: this.state.offTargetCleared,
+      taskTimeLeft: this.state.taskTimeLeft,
+      levelTimeLeft: this.state.levelTimeLeft,
       movesLeft: this.state.movesLeft,
       score: this.state.score,
       phase: this.state.phase,

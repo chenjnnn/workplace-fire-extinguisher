@@ -170,6 +170,8 @@ export function createGame(levelId: number, seed?: number, mode: GameMode = 'nor
     rescues,
     pendingQuiz: null,
     quizzesTaken: 0,
+    taskTimeLeft: level.taskTimerSeconds ?? 0,
+    levelTimeLeft: level.levelTimerSeconds ?? 0,
     seqIndex: 0,
     seqProgress: 0,
     offTargetCleared: 0,
@@ -702,6 +704,12 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     events,
     totalCleared: state.totalCleared + totalCleared,
     clearedCount,
+    // 倒计时：每抓完一格重置任务计时
+    taskTimeLeft:
+      seqIndex !== state.seqIndex && state.level.taskTimerSeconds
+        ? state.level.taskTimerSeconds
+        : state.taskTimeLeft,
+    levelTimeLeft: state.levelTimeLeft,
     // 囚车（按颜色顺序）的进度
     seqIndex,
     seqProgress,
@@ -906,6 +914,12 @@ export function answerQuiz(
 
   if (e.kind === 'moves') {
     next = { ...next, movesLeft: next.movesLeft + e.amount };
+  } else if (e.kind === 'time') {
+    // 加时间：有倒计时才有意义，没倒计时的关卡自动变成加 1 步
+    const before = next.taskTimeLeft + next.levelTimeLeft;
+    next = addTime(next, e.amount);
+    const after = next.taskTimeLeft + next.levelTimeLeft;
+    if (after === before) next = { ...next, movesLeft: next.movesLeft + 1 };
   } else if (e.kind === 'score') {
     next = { ...next, score: next.score + e.amount };
   } else if (e.kind === 'rage') {
@@ -973,6 +987,49 @@ function shortageType(
   return count < 3 ? target.type : null;
 }
 
+
+/**
+ * 推进倒计时（引擎每帧调用，dt 单位秒）。
+ *
+ * 两种倒计时：
+ *   · taskTimeLeft  —— 每个囚车间隔的时限，抓完一格就重置
+ *   · levelTimeLeft —— 整关时限，不会重置
+ * 归零 = 失败（领导跑了）。
+ */
+export function tickTimer(state: GameState, dt: number): GameState {
+  if (state.phase !== 'idle') return state;
+
+  const hasLevel = state.level.levelTimerSeconds ? state.levelTimeLeft > 0 : false;
+  const hasTask = state.level.taskTimerSeconds ? state.taskTimeLeft > 0 : false;
+  if (!hasLevel && !hasTask) return state;
+
+  let next = state;
+
+  if (hasLevel) {
+    const left = state.levelTimeLeft - dt;
+    if (left <= 0) return { ...state, levelTimeLeft: 0, phase: 'lost' };
+    next = { ...next, levelTimeLeft: left };
+  }
+
+  if (hasTask && !hasLevel) {
+    const left = state.taskTimeLeft - dt;
+    if (left <= 0) return { ...next, taskTimeLeft: 0, phase: 'lost' };
+    next = { ...next, taskTimeLeft: left };
+  }
+
+  return next;
+}
+
+/** 加时间（道具用）：优先加任务计时，没有再尝试整关计时 */
+export function addTime(state: GameState, seconds: number): GameState {
+  if (state.level.levelTimerSeconds) {
+    return { ...state, levelTimeLeft: state.levelTimeLeft + seconds };
+  }
+  if (state.level.taskTimerSeconds) {
+    return { ...state, taskTimeLeft: state.taskTimeLeft + seconds };
+  }
+  return state;
+}
 
 /**
  * 跳过当前囚车间隔（用「非目标消除数」换）。

@@ -25,6 +25,7 @@ import type { VillainType } from './types.ts';
 // ---------------------------------------------------------------- 工具
 export type ToolEffect =
   | { kind: 'moves'; amount: number }
+  | { kind: 'time'; amount: number }
   | { kind: 'score'; amount: number }
   | { kind: 'rage'; amount: number }
   /** 清掉最满的一整行 */
@@ -53,23 +54,23 @@ export const TOOLS: Record<string, Tool> = {
   chiefVisit: {
     id: 'chiefVisit',
     name: '上级领导突击检查',
-    desc: '大领导突然推门进来，他所有的话术当场作废 —— 清掉一整行',
+    desc: '大领导突然推门进来，他忙着解释，顾不上盯你了 —— 多 3 步',
     icon: '🚪',
-    effect: { kind: 'clearRow' },
+    effect: { kind: 'moves', amount: 3 },
   },
   discipline: {
     id: 'discipline',
     name: '纪检部门进驻',
-    desc: '查到他收受供应商好处，一整条线的人都被带走 —— 清掉一整列',
+    desc: '查到他收受供应商好处，被叫去谈话，一下午没人催进度 —— 多 4 步',
     icon: '🔍',
-    effect: { kind: 'clearCol' },
+    effect: { kind: 'moves', amount: 4 },
   },
   arbitration: {
     id: 'arbitration',
     name: '劳动仲裁开庭',
-    desc: '仲裁员一到，他和你同时被叫进去，整层楼都停下来看 —— 清一行加一列',
+    desc: '仲裁员一到，全员停工等他 —— 多 5 秒',
     icon: '⚖️',
-    effect: { kind: 'clearCross' },
+    effect: { kind: 'time', amount: 5 },
   },
   pressExpose: {
     id: 'pressExpose',
@@ -507,6 +508,8 @@ export function describeEffect(effect: ToolEffect): string {
   switch (effect.kind) {
     case 'moves':
       return `+${effect.amount} 步`;
+    case 'time':
+      return `+${effect.amount} 秒`;
     case 'score':
       return `+${effect.amount} 分`;
     case 'rage':

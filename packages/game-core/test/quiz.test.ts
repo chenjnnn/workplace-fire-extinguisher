@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 
 import { QUIZZES, TOOLS, drawQuiz, getTool, describeEffect, judgeAnswer } from '../src/quiz.ts';
 import { answerQuiz, shouldTriggerQuiz, triggerQuiz, QUIZ_EVERY } from '../src/game.ts';
-import { createGame } from '../src/game.ts';
+import { createGame, addTime } from '../src/game.ts';
 
 test('题库数量足够', () => {
   assert.ok(QUIZZES.length >= 20, `题库只有 ${QUIZZES.length} 条，太少`);
@@ -152,28 +152,6 @@ test('答题后 pendingQuiz 清空、计数 +1', () => {
   assert.equal(state.quizzesTaken, 1);
 });
 
-test('清行工具真的清掉一整行（然后补满）', () => {
-  const game = createGame(1, 42);
-  const quiz = QUIZZES.find((q) => TOOLS[q.reward]?.effect.kind === 'clearRow');
-  assert.ok(quiz, '应该有一道题奖励清行');
-  const rightIdx = quiz!.options.findIndex((o) => o.correct);
-  const before = game.board.map((row) => row.filter(Boolean).length);
-  const { state } = answerQuiz({ ...game, pendingQuiz: quiz! }, rightIdx);
-  // 清完会补齐，所以棋盘应该还是满的
-  const after = state.board.map((row) => row.filter(Boolean).length);
-  assert.equal(after.reduce((a, b) => a + b, 0), before.reduce((a, b) => a + b, 0), '棋盘应该补满');
-  assert.ok(state.score > game.score, '清行应该加分');
-});
-
-test('清列工具会加分', () => {
-  const game = createGame(1, 42);
-  const quiz = QUIZZES.find((q) => TOOLS[q.reward]?.effect.kind === 'clearCol');
-  assert.ok(quiz);
-  const rightIdx = quiz!.options.findIndex((o) => o.correct);
-  const { state } = answerQuiz({ ...game, pendingQuiz: quiz! }, rightIdx);
-  assert.ok(state.score > game.score);
-});
-
 test('评价：选对给「将了一军」', () => {
   const quiz = QUIZZES[0]!;
   const rightIdx = quiz.options.findIndex((o) => o.correct);
@@ -194,4 +172,21 @@ test('triggerQuiz 会把题目写进 state', () => {
   const { state, usedIds } = triggerQuiz(game, [], 777);
   assert.ok(state.pendingQuiz);
   assert.equal(usedIds.length, 1);
+});
+
+test('道具现在只加步数或时间，不改棋盘', () => {
+  // 用户要求：把「清一行/清一列」换成「加步数或加时间」
+  const kinds = Object.values(TOOLS).map((t) => t.effect.kind);
+  assert.equal(kinds.includes('clearRow'), false, '不应该还有清行道具');
+  assert.equal(kinds.includes('clearCol'), false, '不应该还有清列道具');
+  assert.ok(kinds.includes('moves'), '应该有加步道具');
+  assert.ok(kinds.includes('time'), '应该有加时间道具');
+});
+
+test('加时间道具在有倒计时的关卡里真的加时间', () => {
+  const base = createGame(5, 42);
+  assert.ok((base.level.taskTimerSeconds ?? 0) > 0, '第 5 关应该有任务倒计时');
+  const before = base.taskTimeLeft;
+  const state = addTime(base, 5);
+  assert.equal(state.taskTimeLeft, before + 5);
 });

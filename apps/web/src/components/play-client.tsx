@@ -29,6 +29,7 @@ import { sound } from '@/game/audio';
 import { applyLevelResult, loadSave, persistSave } from '@/lib/save';
 import { ResultOverlay } from '@/components/result';
 import { AvatarFigure } from '@/components/art';
+import { Countdown } from '@/components/countdown';
 import { PrisonVan } from '@/components/prison-van';
 import { RescueBar } from '@/components/rescue-bar';
 import { SceneIntro } from '@/components/scene-intro';
@@ -460,6 +461,13 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
       <RescueBar rescues={hud?.rescues ?? []} />
 
       {/* 囚车：把「还差几个」变成「已经关进去几个」 */}
+      <Countdown
+        taskLeft={hud?.taskTimeLeft ?? 0}
+        taskTotal={hud?.taskTimeTotal ?? 0}
+        levelLeft={hud?.levelTimeLeft ?? 0}
+        levelTotal={hud?.levelTimeTotal ?? 0}
+      />
+
       <PrisonVan
         sequence={hud?.sequence ?? []}
         skipsLeft={hud?.skipsLeft ?? 0}
