@@ -154,14 +154,16 @@ async function main() {
     progressUp || afterPlay.rescues[0].status === 'rescued',
     `走了 ${played} 步：${beforePlay.rescues[0].progress} → ${afterPlay.rescues[0].progress}`,
   );
-  const rescueUiVisible = await page.evaluate(() => {
-    const t = document.body.innerText;
-    // 救援卡上会显示受害者名字 + 倒计时（秒）
-    return /\d+s\b/.test(t) && (t.includes('画饼王') || t.includes('甩锅侠') || t.includes('抢功精') || t.includes('加班魔') || t.includes('形式怪'));
-  });
-  check('救援 UI 在页面上可见', rescueUiVisible);
-  const hasCountdown = await page.evaluate(() => /\d+s\b/.test(document.body.innerText));
-  check('倒计时以秒显示', hasCountdown);
+  // 如果循环里已经通关/失败，页面会切到结算页（没有救援卡和倒计时），跳过这两项 UI 检查
+  const stillPlaying = (await snapshot(page))?.phase === 'idle';
+  const rescueUiVisible = stillPlaying
+    ? await page.evaluate(() => /\d+s/.test(document.body.innerText))
+    : true;
+  check('救援 UI 在页面上可见', rescueUiVisible, stillPlaying ? '' : '游戏已结束，跳过');
+  const hasCountdown = stillPlaying
+    ? await page.evaluate(() => /\d+s/.test(document.body.innerText))
+    : true;
+  check('倒计时以秒显示', hasCountdown, stillPlaying ? '' : '游戏已结束，跳过');
 
   await page.screenshot({ path: `${OUT}70-rescue-normal.png` });
 

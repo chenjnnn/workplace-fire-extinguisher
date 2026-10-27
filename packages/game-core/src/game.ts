@@ -622,26 +622,34 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
        *   · 一次消太多时会连续推进多个隔间，所以用 while 而不是 if
        */
       const seq = state.level.targetSequence;
-      const cleared = count ?? 0;
-      let left = cleared;
-      while (left > 0 && seqIndex < seq.length) {
-        const cur = seq[seqIndex]!;
-        if (cur.type !== key) {
-          offTargetCleared += left;
-          break;
-        }
-        const need = Math.max(1, cur.need);
-        const canPut = Math.min(left, need - seqProgress);
-        seqProgress += canPut;
-        left -= canPut;
-        if (seqProgress >= need) {
+
+      /**
+       * 进度按「次数」算，不按「个数」。
+       *
+       * 用户的原话：「n 是现在消过的次数而不是个数，m 是要求的总次数」。
+       *
+       * 规则：
+       *   · 这一手如果命中了当前目标色，就算 1 次（消 1 只还是 5 只都一样）
+       *   · 如果序列里连续几格都是同色，这一手的「1 次」可以继续填下一格 ——
+       *     这样「一次消除完成多个隔间」才成立
+       *   · 没命中的颜色只累计「非目标消除数」（满 5 个换一次跳过）
+       */
+      if (key === seq[seqIndex]?.type) {
+        seqProgress += 1;
+        // 连续同色：一次消除可以一路填过去
+        while (seqIndex < seq.length) {
+          const cur = seq[seqIndex]!;
+          if (cur.type !== key) break;
+          if (seqProgress < Math.max(1, cur.need)) break;
           seqIndex += 1;
           seqProgress = 0;
+          // 下一格还是同色 → 这一手再记 1 次
+          if (seq[seqIndex]?.type === key) seqProgress = 1;
+          else break;
         }
-        if (left <= 0) break;
+      } else {
+        offTargetCleared += count ?? 0;
       }
-      // 目标已经全部抓完，剩下的都算非目标
-      if (seqIndex >= seq.length && left > 0) offTargetCleared += left;
     }
 
     // 消除结果反馈到救援进度

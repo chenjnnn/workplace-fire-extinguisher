@@ -59,7 +59,7 @@ export function VictoryStage({ types }: Props) {
             animationDelay: r.delay,
           }}
         >
-          <VillainTile type={r.type} size={38} />
+          <VillainTile type={r.type} size={44} />
         </div>
       ))}
 
@@ -72,6 +72,8 @@ export function VictoryStage({ types }: Props) {
       <style jsx>{`
         /* ---------- 头像：在舞台里乱窜 ---------- */
         .runner {
+          opacity: 0.92;
+          filter: drop-shadow(0 3px 5px rgba(70, 50, 30, 0.28));
           animation-name: flee;
           animation-timing-function: ease-in-out;
           animation-iteration-count: infinite;
@@ -124,7 +126,7 @@ export function VictoryStage({ types }: Props) {
 
         .slap-emoji {
           display: block;
-          font-size: 54px;
+          font-size: 68px;
           line-height: 1;
           filter: drop-shadow(0 3px 4px rgba(60, 40, 20, 0.22));
         }
@@ -134,7 +136,7 @@ export function VictoryStage({ types }: Props) {
           position: absolute;
           left: 58%;
           top: -6%;
-          font-size: 18px;
+          font-size: 24px;
           font-weight: 900;
           color: #ff4d3d;
           white-space: nowrap;

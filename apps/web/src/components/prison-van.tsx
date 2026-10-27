@@ -130,12 +130,12 @@ export function PrisonVan({ sequence, skipsLeft, onSkip, canSweep, sweepLeft, on
                       )}
                     </div>
 
-                    {/* 已消/need */}
+                    {/* 已完成次数 / 需要次数 */}
                     <span
                       className="font-num mt-0.5 text-[9px] leading-none"
                       style={{ color: done ? '#7dd3a0' : isCurrent ? '#ffffff' : '#8b95a3' }}
                     >
-                      {Math.min(slot.current, slot.need)}/{slot.need}
+                      {Math.min(slot.current, slot.need)}/{slot.need}次
                     </span>
 
                     {/* 进度条 */}
