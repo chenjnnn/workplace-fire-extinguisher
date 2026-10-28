@@ -691,6 +691,11 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     rage += outcome.rage;
     // 恶霸反击只扣分（在 outcome.score 里已体现），不影响步数
     score -= Math.round(outcome.overtimePenalty * VILLAINS.overtime.baseScore);
+    // 把「被加班魔反咬」的扣分写进事件，让渲染层能飘字提示
+    const bitten = Math.round(outcome.overtimePenalty * VILLAINS.overtime.baseScore);
+    if (bitten > 0 && outcome.events.length > 0) {
+      for (const e of outcome.events) e.bitten = bitten;
+    }
     events.push(...outcome.events);
     totalCleared += outcome.cleared.length;
     // 这一手（含连锁）累计的得分，用来决定要不要计入收网进度

@@ -400,6 +400,8 @@ export interface ComboEvent {
   /** 消除的坐标（给渲染层做粒子） */
   cells: Coord[];
   type: VillainType;
+  /** 这一手被加班魔反咬扣掉的分（0 = 没扣） */
+  bitten?: number;
   /** 发生在第几步 */
   move: number;
   /**

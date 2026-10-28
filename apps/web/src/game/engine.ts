@@ -962,6 +962,18 @@ export class GameEngine {
 
     }
 
+    /**
+     * 被加班魔反咬：明确告诉玩家为什么分数掉了。
+     *
+     * 之前只有数字变化，没有任何提示 —— 用户反馈「加班魔扣分是什么机制」，
+     * 说明这个机制等于没被发现过。
+     */
+    if (event.bitten && event.bitten > 0 && cells.length > 0) {
+      const first = cells[0]!;
+      const { x, y } = this.cellCenter(first.row, first.col);
+      this.addFloat(x, y - this.layout.cell * 0.8, `被反咬 −${event.bitten}`, '#dc2626', 16, true);
+    }
+
     // 一记「啪」—— 一组牌只扇一下，避开顶部被裁掉的区域
     sound.play('slap');
     if (cells.length > 0) {
@@ -1540,6 +1552,7 @@ export class GameEngine {
       tile.poisoned,
       tile.hp,
       tile.variant ?? 0,
+      VILLAINS[tile.type].hp,
     );
     const size = cell * scale;
 

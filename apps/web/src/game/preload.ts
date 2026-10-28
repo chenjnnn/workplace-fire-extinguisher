@@ -369,8 +369,10 @@ export interface TileSpriteOptions {
   size: number;
   /** 是否被毒雾污染 */
   poisoned?: boolean;
-  /** 剩余血量（贪官 2 血时要显示裂痕） */
+  /** 剩余血量 */
   hp?: number;
+  /** 满血值（用来画外圈进度） */
+  hpMax?: number;
   /** 视觉变体编号（0/1/2） */
   variant?: number;
   /** 是否用用户捏的形象替换诈骗犯（在结算/主页展示用） */
@@ -394,7 +396,7 @@ export function drawTileSprite(
   ctx: CanvasRenderingContext2D,
   options: TileSpriteOptions,
 ): void {
-  const { type, size, poisoned = false, hp = 1 } = options;
+  const { type, size, poisoned = false, hp = 1, hpMax = 1 } = options;
 
   ctx.save();
 
@@ -420,15 +422,37 @@ export function drawTileSprite(
   ctx.restore();
 
   // ---- 受伤标记
-  if (hp <= 1 && type === 'grafter') {
-    ctx.strokeStyle = '#b91c1c';
-    ctx.lineWidth = size * 0.03;
+  /**
+   * 2 血角色的「外圈进度环」。
+   *
+   * 用户的要求：「血角色外圈有一个进度条，第一次消除时进度圈过一半」。
+   *
+   * 关键约束：**满血时不画任何东西** ——
+   * 玩家之前明确要求「同一种颜色的头像必须完全一致」，
+   * 常驻外圈会让同色出现两个版本。所以只在掉过血之后才显示。
+   *
+   * 满血 2 → 掉血后显示 50% 的环；再消一次就没了（格子被清掉）。
+   */
+  if (hpMax > 1 && hp < hpMax) {
+    const ratio = Math.max(0, Math.min(1, hp / hpMax)); // 剩 1/2 血 → 0.5
+    const ringR = r * 1.02;
+
+    // 底环（表示「满血」的总长度）
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.28)';
+    ctx.lineWidth = size * 0.085;
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 当前血量（从 12 点方向顺时针）
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = size * 0.085;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(cx + r * 0.42, cy - r * 0.8);
-    ctx.lineTo(cx + r * 0.56, cy - r * 0.5);
-    ctx.lineTo(cx + r * 0.44, cy - r * 0.26);
+    ctx.arc(cx, cy, ringR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ratio);
     ctx.stroke();
+    ctx.restore();
   }
 
   // ---- 毒雾（甩锅侠甩出的锅）
@@ -1456,8 +1480,9 @@ export class SpriteCache {
     poisoned: boolean,
     hp: number,
     variant = 0,
+    hpMax = 1,
   ): HTMLCanvasElement {
-    const key = hashKey(`${type}|${Math.round(size)}|${poisoned}|${hp}|${variant}`);
+    const key = hashKey(`${type}|${Math.round(size)}|${poisoned}|${hp}|${variant}|${hpMax}`);
     const cached = this.tiles.get(key);
     if (cached) return cached;
 
@@ -1468,7 +1493,7 @@ export class SpriteCache {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('无法创建离屏画布');
     ctx.scale(dpr, dpr);
-    drawTileSprite(ctx, { type, size, poisoned, hp, variant });
+    drawTileSprite(ctx, { type, size, poisoned, hp, variant, hpMax });
 
     this.tiles.set(key, canvas);
     return canvas;
