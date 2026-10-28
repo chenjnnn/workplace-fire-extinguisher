@@ -30,12 +30,19 @@ interface Props {
  * 全部限制在页面上半部分（y 4%~30%）：结算页的分数、统计、按钮都在下面，
  * 头像乱窜到那里会把文字盖住。上半部是标题和星星，盖住也没关系。
  */
+/**
+ * 逃跑路线（相对 300px 高的舞台）。
+ *
+ * 现在舞台是结算页底部那块空白区，所以垂直方向可以铺开。
+ */
 const PATHS = [
-  { x: '8%', y: '6%', dx: '52%', dy: '14%', dur: '3.1s', delay: '0s' },
-  { x: '70%', y: '4%', dx: '-42%', dy: '18%', dur: '3.8s', delay: '0.4s' },
-  { x: '20%', y: '24%', dx: '46%', dy: '-14%', dur: '3.4s', delay: '0.9s' },
-  { x: '74%', y: '22%', dx: '-36%', dy: '-14%', dur: '4.1s', delay: '0.2s' },
-  { x: '42%', y: '14%', dx: '26%', dy: '16%', dur: '3.6s', delay: '1.2s' },
+  // dx/dy 用 vw，因为 CSS 里 translate 的百分比是相对元素自身尺寸的，
+  // 用它会让位移只有几十像素（头像全挤在中间）。
+  { x: '4%', y: '12%', dx: '58vw', dy: '18vh', dur: '3.1s', delay: '0s' },
+  { x: '78%', y: '8%', dx: '-46vw', dy: '26vh', dur: '3.8s', delay: '0.4s' },
+  { x: '10%', y: '62%', dx: '52vw', dy: '-20vh', dur: '3.4s', delay: '0.9s' },
+  { x: '82%', y: '56%', dx: '-42vw', dy: '-22vh', dur: '4.1s', delay: '0.2s' },
+  { x: '42%', y: '36%', dx: '30vw', dy: '22vh', dur: '3.6s', delay: '1.2s' },
 ];
 
 export function VictoryStage({ types }: Props) {
@@ -104,7 +111,7 @@ export function VictoryStage({ types }: Props) {
         /* ---------- 巴掌：在舞台中央偏右的位置循环挥 ---------- */
         .chaser {
           left: 50%;
-          top: 17%;
+          top: 50%;
           animation: chaseMove 3.2s ease-in-out infinite;
         }
         @keyframes chaseMove {

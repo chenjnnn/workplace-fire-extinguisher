@@ -45,13 +45,6 @@ export function ResultOverlay({
 
   return (
     <div className={`animate-in-up relative flex h-[100dvh] flex-col ${won ? 'bg-[#fff3e2]' : 'bg-[#fff8ec]'}`}>
-      {/* 通关庆祝：巴掌追着头像扇（纯装饰，不参与玩法） */}
-      {won && (
-        <div className="pointer-events-none absolute inset-0 z-30">
-          <VictoryStage types={state.level.types} />
-        </div>
-      )}
-
       <div className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 pt-4">
       <h1
         className={`text-center text-3xl font-black ${won ? 'text-[#f59e0b]' : 'text-[#4a423b]'}`}
@@ -219,6 +212,17 @@ export function ResultOverlay({
       <p className="mt-4 px-4 text-center text-[10px] leading-relaxed text-[#c9bda9]">
         {share?.disclaimer}
       </p>
+
+      {/*
+        通关庆祝：巴掌追着头像扇。
+        用户要求挪到「免责声明下面那块空白」—— 所以放在内容流末尾，
+        给一个固定高度让动画有舞台，不再盖住上面的分数和统计。
+      */}
+      {won && (
+        <div className="relative mt-2 h-[300px] w-full overflow-hidden">
+          <VictoryStage types={state.level.types} />
+        </div>
+      )}
       </div>
 
       {/*
