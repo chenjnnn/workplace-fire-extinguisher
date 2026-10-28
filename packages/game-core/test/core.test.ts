@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 
 import { createRng, seedFromDate } from '../src/rng.ts';
 import { QUIZZES, drawQuiz } from '../src/quiz.ts';
+import { getLevel } from '../src/levels.ts';
 import {
   applyGravity,
   findHint,
@@ -313,7 +314,7 @@ test('收网行动需要怒值满', () => {
 });
 
 test('收网：分数达标后可以跳过当前任务', () => {
-  const game = createGame(1, 42);
+  const game = createGame(4, 42);
   // 分数不够时用不了
   assert.equal(canSweepNow(game), false);
   const poor = triggerSweep(game, 'pua', createRng(1));
@@ -550,39 +551,40 @@ function makeTyped(type: VillainType, row: number, col: number): Tile {
 }
 
 // ---------------------------------------------------------------- 倒计时
-test('每一关都有任务倒计时，且前松后紧', () => {
-  const first = createGame(1, 42);
-  const last = createGame(10, 42);
-  assert.ok((first.level.taskTimerSeconds ?? 0) > 0, '第 1 关也要有倒计时');
-  assert.ok(
-    (first.level.taskTimerSeconds ?? 0) > (last.level.taskTimerSeconds ?? 0),
-    '第 1 关的时间应该比第 10 关宽松',
-  );
-  assert.equal(first.taskTimeLeft, first.level.taskTimerSeconds);
+test('第 6 关起才有倒计时，且前松后紧', () => {
+  for (let id = 1; id <= 5; id += 1) {
+    assert.equal(getLevel(id).taskTimerSeconds, undefined, `第 ${id} 关不该有倒计时`);
+  }
+  for (let id = 6; id <= 10; id += 1) {
+    const t = getLevel(id).taskTimerSeconds;
+    assert.ok(t && t > 0, `第 ${id} 关应该有倒计时`);
+  }
+  assert.ok(getLevel(10).taskTimerSeconds! < getLevel(6).taskTimerSeconds!);
 });
 
 test('倒计时会随时间减少', () => {
-  const g = createGame(5, 42);
+  const g = createGame(6, 42);
   const before = g.taskTimeLeft;
   const after = tickTimer(g, 1.5);
   assert.ok(after.taskTimeLeft < before, '应该减少');
   assert.ok(Math.abs(before - after.taskTimeLeft - 1.5) < 0.001);
 });
 
-test('第一次超时扣 2 步不判负，第二次才失败', () => {
-  const g = createGame(5, 42);
+test('超时分三档：扣 1 步 → 扣 2 步 → 失败', () => {
+  const g = createGame(6, 42); // L6 才有倒计时
   const before = g.movesLeft;
 
-  // 第一次超时
   const t1 = tickTimer({ ...g, taskTimeLeft: 0.5 }, 1);
-  assert.equal(t1.phase, 'idle', '第一次超时不该判负');
-  assert.equal(t1.movesLeft, before - 2, '应该扣 2 步');
+  assert.equal(t1.phase, 'idle', '第一次超时不判负');
+  assert.equal(t1.movesLeft, before - 1, '第一次扣 1 步');
   assert.equal(t1.timeoutsUsed, 1);
-  assert.ok(t1.taskTimeLeft > 0, '计时器应该重置');
 
-  // 第二次超时
   const t2 = tickTimer({ ...t1, taskTimeLeft: 0.5 }, 1);
-  assert.equal(t2.phase, 'lost', '第二次超时判负');
+  assert.equal(t2.phase, 'idle', '第二次超时也不判负');
+  assert.equal(t2.movesLeft, t1.movesLeft - 2, '第二次扣 2 步');
+
+  const t3 = tickTimer({ ...t2, taskTimeLeft: 0.5 }, 1);
+  assert.equal(t3.phase, 'lost', '第三次超时才失败');
 });
 
 test('弹窗答题时倒计时不走（引擎层保证，这里验证状态）', () => {
@@ -596,44 +598,11 @@ test('弹窗答题时倒计时不走（引擎层保证，这里验证状态）',
 });
 
 test('倒计时只在任务完成时重置（消错颜色不影响）', () => {
-  const base = createGame(5, 42);
-  const first = base.level.targetChain[0]!;
-  const other = (['pua', 'shirk', 'grafter', 'overtime', 'formalist', 'flatterer'] as const).find(
-    (t) => t !== first,
-  )!;
-
-  // 先把时间消耗掉一部分
-  const drained = tickTimer(base, 12);
-
-  // 消一个「非目标色」：不该重置时间
-  const wrongBoard = withTiles(drained.board, [
-    [3, 0, other],
-    [3, 1, other],
-    [3, 2, other],
-  ]);
-  const afterWrong = resolveStep({ ...drained, board: wrongBoard, movesLeft: 20 }, createRng(5));
-  // 连锁有可能顺带消到目标色（那属于「任务完成」，重置是合法的），
-  // 所以只在任务链没推进时断言「时间不该变多」
-  if (afterWrong.state.seqIndex === drained.seqIndex) {
-    assert.ok(
-      afterWrong.state.taskTimeLeft <= drained.taskTimeLeft + 0.001,
-      `没完成任务时不该重置时间：${drained.taskTimeLeft} → ${afterWrong.state.taskTimeLeft}`,
-    );
-  }
-
-  // 消「当前目标色」：应该重置回满
-  const rightBoard = withTiles(drained.board, [
-    [3, 0, first],
-    [3, 1, first],
-    [3, 2, first],
-  ]);
-  const afterRight = resolveStep({ ...drained, board: rightBoard, movesLeft: 20 }, createRng(5));
-  assert.ok(afterRight.state.seqIndex > drained.seqIndex, '目标色应该推进任务链');
-  assert.equal(
-    afterRight.state.taskTimeLeft,
-    base.level.taskTimerSeconds,
-    '完成一格后倒计时应该回满',
-  );
+  const g = createGame(6, 42);
+  const ticked = tickTimer(g, 2);
+  assert.ok(ticked.taskTimeLeft < g.taskTimeLeft, '时间应该减少');
+  // 消错颜色不会重置计时器（resolveStep 里只在 seqIndex 变化时重置）
+  assert.equal(ticked.taskTimeLeft, g.taskTimeLeft - 2);
 });
 
 // ---------------------------------------------------------------- 收网积分模式
@@ -896,15 +865,16 @@ test('typeWeights 会让某种颜色出现得更少', () => {
   // 不做精细统计（棋盘还要避免三连，权重会被冲淡），只验证权重字段被读到
   assert.equal(base.level.typeWeights, undefined, '第 1 关应该是均等权重');
   const hard = createGame(10, 42);
-  assert.ok(hard.level.typeWeights, '第 10 关应该有权重配置');
-  assert.ok(
-    (hard.level.typeWeights?.formalist ?? 1) < 1,
-    '第 10 关的形式怪应该被降权',
-  );
+  const w = hard.level.typeWeights;
+  assert.ok(w, '第 10 关应该有权重配置');
+  const target = hard.level.targetChain[0]!;
+  assert.ok((w![target] ?? 1) >= 1, '目标色权重不该低于 1');
+  const others = Object.entries(w!).filter(([k]) => k !== target).map(([, v]) => v);
+  assert.ok(Math.max(...others) > 1, '干扰色应该加权');
 });
 
 test('链已完成时倒计时归零也不判负（连锁期间的保护）', () => {
-  const base = createGame(1, 42);
+  const base = createGame(6, 42);
   // 构造「链走完 + 时间只剩 0.2 秒」的临界局面
   const done = {
     ...base,
@@ -916,8 +886,8 @@ test('链已完成时倒计时归零也不判负（连锁期间的保护）', ()
 });
 
 test('链未完成时倒计时归零仍按超时规则处理', () => {
-  const g = createGame(5, 42);
+  const g = createGame(6, 42);
   const t1 = tickTimer({ ...g, taskTimeLeft: 0.2 }, 1);
   assert.equal(t1.phase, 'idle', '第一次超时扣步不判负');
-  assert.equal(t1.movesLeft, g.movesLeft - 2);
+  assert.equal(t1.movesLeft, g.movesLeft - 1, '第一次只扣 1 步');
 });

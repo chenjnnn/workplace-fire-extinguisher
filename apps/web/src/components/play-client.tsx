@@ -91,10 +91,12 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
     return undefined;
   }, [hud?.taskStreak]);
 
-  // 奖励卡打开期间暂停倒计时
-  useEffect(() => {
-    engineRef.current?.setUiPaused((hud?.pendingReward ?? null) !== null);
-  }, [hud?.pendingReward]);
+  /**
+   * A11：奖励卡**不再**暂停倒计时。
+   *
+   * 用户要求「只有暂停菜单才停表」。奖励卡现在是 2 秒自动消失的轻提示，
+   * 不拦操作也不停表，所以这里不再调 setUiPaused。
+   */
   const [finished, setFinished] = useState<GameState | null>(null);
   const [share, setShare] = useState<ShareData | null>(null);
   const [avatar, setAvatar] = useState<AvatarConfig | null>(null);

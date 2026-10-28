@@ -423,6 +423,16 @@ export function drawTileSprite(
 
   // ---- 受伤标记
   /**
+   * A15 色盲友好：每种颜色在右下角带一个固定形状的角标。
+   *
+   * 形状和颜色是**一一对应**的，所以不看颜色也能分辨：
+   *   pua 圆 / shirk 方 / grafter 菱形 / overtime 三角 / formalist 星 / flatterer 六边形
+   *
+   * 角标画在角落、很小，不改变主体外观 —— 同一种颜色依然长得完全一致。
+   */
+  drawTypeBadge(ctx, type, cx + r * 0.74, cy + r * 0.74, r * 0.19);
+
+  /**
    * 2 血角色的「外圈进度环」。
    *
    * 用户的要求：「血角色外圈有一个进度条，第一次消除时进度圈过一半」。
@@ -521,6 +531,88 @@ const FLAT_SUIT: Record<VillainType, string> = {
  *   · 五官用粗黑线条，极简
  *   · 一张脸最多 6 个元素：头发、眼、眉、嘴、配饰、西装领
  */
+/** A15：六种颜色的形状角标（色盲友好） */
+function drawTypeBadge(
+  ctx: CanvasRenderingContext2D,
+  type: VillainType,
+  x: number,
+  y: number,
+  size: number,
+): void {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // 白色圆底 + 深色描边，保证在任何底色上都看得见
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
+  circle(ctx, 0, 0, size * 1.18);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(30, 26, 22, 0.55)';
+  ctx.lineWidth = Math.max(1, size * 0.22);
+  ctx.stroke();
+
+  ctx.fillStyle = '#2b2118';
+  ctx.strokeStyle = '#2b2118';
+  ctx.lineWidth = size * 0.3;
+  ctx.lineJoin = 'round';
+
+  const s2 = size * 0.72;
+  if (type === 'pua') {
+    // ●
+    ctx.beginPath();
+    ctx.arc(0, 0, s2 * 0.62, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'shirk') {
+    // ■
+    ctx.beginPath();
+    ctx.rect(-s2 * 0.58, -s2 * 0.58, s2 * 1.16, s2 * 1.16);
+    ctx.fill();
+  } else if (type === 'grafter') {
+    // ◆
+    ctx.beginPath();
+    ctx.moveTo(0, -s2 * 0.75);
+    ctx.lineTo(s2 * 0.75, 0);
+    ctx.lineTo(0, s2 * 0.75);
+    ctx.lineTo(-s2 * 0.75, 0);
+    ctx.closePath();
+    ctx.fill();
+  } else if (type === 'overtime') {
+    // ▲
+    ctx.beginPath();
+    ctx.moveTo(0, -s2 * 0.78);
+    ctx.lineTo(s2 * 0.72, s2 * 0.55);
+    ctx.lineTo(-s2 * 0.72, s2 * 0.55);
+    ctx.closePath();
+    ctx.fill();
+  } else if (type === 'formalist') {
+    // ★
+    ctx.beginPath();
+    for (let i = 0; i < 10; i += 1) {
+      const ang = -Math.PI / 2 + (i * Math.PI) / 5;
+      const rad = i % 2 === 0 ? s2 * 0.85 : s2 * 0.36;
+      const px = Math.cos(ang) * rad;
+      const py = Math.sin(ang) * rad;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    // ⬡ 六边形
+    ctx.beginPath();
+    for (let i = 0; i < 6; i += 1) {
+      const ang = -Math.PI / 2 + (i * Math.PI) / 3;
+      const px = Math.cos(ang) * s2 * 0.8;
+      const py = Math.sin(ang) * s2 * 0.8;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
 function drawFlatBoss(
   ctx: CanvasRenderingContext2D,
   type: VillainType,

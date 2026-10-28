@@ -984,6 +984,17 @@ export class GameEngine {
       this.addFloat(x, y - this.layout.cell * 0.8, `被反咬 −${event.bitten}`, '#dc2626', 16, true);
     }
 
+    // A5 / A6 的轻提示
+    if (event.hint && cells.length > 0 && this.layout.cell > 0) {
+      const c = cells[0]!;
+      const { x, y } = this.cellCenter(c.row, c.col);
+      if (event.hint.kind === 'next-target') {
+        this.addFloat(x, y - this.layout.cell * 0.6, `顺带抓到 +${event.hint.points}`, '#f59e0b', 15, true);
+      } else {
+        this.addFloat(x, y - this.layout.cell * 0.6, '连锁不计数', '#9ca3af', 14, true);
+      }
+    }
+
     // 一记「啪」—— 一组牌只扇一下，避开顶部被裁掉的区域
     sound.play('slap');
     if (cells.length > 0) {

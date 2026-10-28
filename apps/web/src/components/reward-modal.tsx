@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+
 /**
  * 连击奖励卡
  *
@@ -19,9 +21,21 @@ interface Props {
 export function RewardModal({ reward, onClose }: Props) {
   const isScore = reward.kind === 'score';
 
+  /**
+   * A11：奖励卡不再阻塞操作。
+   *
+   * 之前是模态弹窗，必须点「继续打」才消失，还停表。
+   * 现在 2 秒后自动关，不拦点击（pointer-events-none），也不停表 ——
+   * 只有暂停菜单才停表。
+   */
+  useEffect(() => {
+    const t = window.setTimeout(onClose, 2000);
+    return () => window.clearTimeout(t);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2e2a24]/55 px-6 backdrop-blur-[2px]">
-      <div className="animate-in-up w-full max-w-[300px] rounded-2xl bg-white p-5 text-center shadow-xl">
+    <div className="pointer-events-none fixed inset-x-0 bottom-24 z-[60] flex justify-center px-6">
+      <div className="animate-in-up w-full max-w-[280px] rounded-2xl bg-white/96 p-4 text-center shadow-xl">
         {/* 连击数 */}
         <div className="flex items-center justify-center gap-1.5">
           {Array.from({ length: reward.streak }).map((_, i) => (
@@ -69,13 +83,6 @@ export function RewardModal({ reward, onClose }: Props) {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-4 w-full rounded-full bg-[#ff6b4a] py-3 text-[15px] font-display text-white active:scale-[0.98]"
-        >
-          继续打
-        </button>
       </div>
     </div>
   );

@@ -173,8 +173,8 @@ test('道具现在只加步数或时间，不改棋盘', () => {
 });
 
 test('加时间道具在有倒计时的关卡里真的加时间', () => {
-  const base = createGame(5, 42);
-  assert.ok((base.level.taskTimerSeconds ?? 0) > 0, '第 5 关应该有任务倒计时');
+  const base = createGame(6, 42);
+  assert.ok((base.level.taskTimerSeconds ?? 0) > 0, '第 6 关应该有任务倒计时');
   const before = base.taskTimeLeft;
   const state = addTime(base, 5);
   assert.equal(state.taskTimeLeft, before + 5);

@@ -136,7 +136,7 @@ function pickRefillType(
   if (count < 4 && rng.next() < 0.6) return targetType;
 
   // 否则降权，让它更难凑
-  return pickWeighted(level.types, withTargetPenalty(level.typeWeights, targetType), rng);
+  return pickWeighted(level.types, withTargetBoost(level.typeWeights, targetType), rng);
 }
 
 /**
@@ -145,14 +145,23 @@ function pickRefillType(
  * 静态权重表达的是「这一关整体偏难」，而玩家真正卡住的是「现在要抓的这个颜色不来」。
  * 所以每次补块都按当前目标色动态打折，难度才跟着链走。
  */
-function withTargetPenalty(
+/**
+ * 把「当前目标色」的权重抬到至少 1（不再降权）。
+ *
+ * 用户指出的方向问题（A4）：之前写「目标色打 7 折」，但数值表却是目标 0.85 / 其他 1.1，
+ * 两边矛盾，而且「降目标色」会让玩家更容易卡住。
+ *
+ * 统一成：**目标色权重 >= 1，干扰色从 1.0 逐步升到 1.35**。
+ * 难度靠「干扰变多」来提升，而不是「目标变少」。
+ */
+function withTargetBoost(
   weights: Partial<Record<VillainType, number>> | undefined,
   target: VillainType | null | undefined,
 ): Partial<Record<VillainType, number>> | undefined {
   if (!weights || !target) return weights;
   const base = weights[target];
-  if (base === undefined) return weights;
-  return { ...weights, [target]: Math.max(0.25, base * 0.7) };
+  if (base !== undefined && base >= 1) return weights;
+  return { ...weights, [target]: 1 };
 }
 
 function generateBoard(level: LevelConfig, rng: Rng): Board {
@@ -436,6 +445,8 @@ function clearMatches(
   chain: number,
   move: number,
   chainCap = 2.6,
+  /** 当前任务目标色：加班魔是目标时不反咬 */
+  targetType?: VillainType | null,
 ): ClearOutcome {
   const next = board.map((row) => [...row]);
   const events: ComboEvent[] = [];
@@ -473,7 +484,13 @@ function clearMatches(
       // 恶霸反击：只扣分，不扣步。
       // 历史教训：早期版本「每个恶霸扣 1 步」，长串联会一次掉十几步，
       // 玩家完全无法预判，输得莫名其妙。改成扣分后规则简单透明：步数只按操作的步走。
-      if (type === 'overtime') {
+      /**
+       * 加班魔反咬：每个扣 7 分。
+       *
+       * 用户的要求（A13）：**当加班魔正好是当前任务目标时，不反咬** ——
+       * 那是玩家在干正事，不该被惩罚；只有消「非目标的加班魔」才反咬。
+       */
+      if (type === 'overtime' && targetType !== 'overtime') {
         overtimePenalty += 0.2;
       }
 
@@ -685,14 +702,29 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
       if (t) matchedTypes.add(t.type);
     }
 
-    const outcome = clearMatches(board, matches, chain, move, state.modeConfig.chainCap);
+    const outcome = clearMatches(
+      board,
+      matches,
+      chain,
+      move,
+      state.modeConfig.chainCap,
+      state.level.targetChain[seqIndex] ?? null,
+    );
     board = outcome.board;
     score += outcome.score;
     rage += outcome.rage;
     // 恶霸反击只扣分（在 outcome.score 里已体现），不影响步数
-    score -= Math.round(outcome.overtimePenalty * VILLAINS.overtime.baseScore);
-    // 把「被加班魔反咬」的扣分写进事件，让渲染层能飘字提示
-    const bitten = Math.round(outcome.overtimePenalty * VILLAINS.overtime.baseScore);
+    // 每个被消的加班魔扣 7 分（和飘字完全一致）
+    score -= Math.round(outcome.overtimePenalty / 0.2) * 7;
+    /**
+     * 「被加班魔反咬」的扣分。
+     *
+     * 用户要求统一成一个数：**每个加班魔扣 7 分**。
+     * 之前是 0.2 × baseScore(35) = 7，但飘字写的是 −35，两边对不上。
+     * 现在直接用固定值，文案也统一成 −7 × 个数。
+     */
+    const bittenCount = Math.round(outcome.overtimePenalty / 0.2);
+    const bitten = bittenCount * 7;
     if (bitten > 0 && outcome.events.length > 0) {
       for (const e of outcome.events) e.bitten = bitten;
     }
@@ -736,14 +768,27 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
        *
        * 原来这里是「问答卡」，用户要求删掉问答、改成这个。
        */
+      /**
+       * 连击奖励（用户 A9 的规则）：
+       *   2 次 → +600 分
+       *   4 次 → +2 步
+       *   6 次 → +1 步（递减）
+       *   8 次 → +600 分（递减）
+       * **不归零**，可以一直累计；只有「消非目标色」或「用跳过」才打断。
+       */
       taskStreak += 1;
       if (taskStreak === 2) {
         score += 600;
         pendingReward = { kind: 'score', amount: 600, streak: 2 };
-      } else if (taskStreak >= 4) {
+      } else if (taskStreak === 4) {
         movesLeft += 2;
         pendingReward = { kind: 'moves', amount: 2, streak: 4 };
-        taskStreak = 0;
+      } else if (taskStreak === 6) {
+        movesLeft += 1;
+        pendingReward = { kind: 'moves', amount: 1, streak: 6 };
+      } else if (taskStreak === 8) {
+        score += 600;
+        pendingReward = { kind: 'score', amount: 600, streak: 8 };
       }
     }
 
@@ -767,6 +812,24 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
       if (isFirstWave) {
         offTargetStreak += 1;
         taskStreak = 0; // 消了非目标色 = 打断连击
+      }
+    }
+
+    /**
+     * A5 / A6：没推进任务的那些消除，给点反馈，别让玩家觉得白消了。
+     *
+     *   · 顺带消到了**下一个**目标色 → 给 200 分，飘字「顺带抓到」
+     *   · 连锁消到了**当前**目标色 → 给 80 分 + 少量跳过进度，灰色飘字「连锁不计数」
+     */
+    const nextTarget = targetChain[seqIndex + 1];
+    if (outcome.events.length > 0) {
+      if (!isFirstWave && target && matchedTypes.has(target)) {
+        score += 80;
+        sweepScore += 60;
+        outcome.events[0]!.hint = { kind: 'chain-target', points: 80 };
+      } else if (nextTarget && matchedTypes.has(nextTarget)) {
+        score += 200;
+        outcome.events[0]!.hint = { kind: 'next-target', points: 200 };
       }
     }
 
@@ -1201,15 +1264,22 @@ export function tickTimer(state: GameState, dt: number): GameState {
        *   第二次 → 判负
        * 这样「目标色一直不来」不会一次就前功尽弃。
        */
+      /**
+       * 超时分三档（用户 A7 的要求）：
+       *   第一次 → 扣 1 步，重置计时器
+       *   第二次 → 扣 2 步，重置计时器
+       *   第三次 → 失败
+       * 前两次都不判负，给玩家两次「再来」的机会。
+       */
       const used = state.timeoutsUsed ?? 0;
-      if (used === 0) {
-        const movesLeft = Math.max(0, next.movesLeft - 2);
+      if (used < 2) {
+        const penalty = used === 0 ? 1 : 2;
+        const movesLeft = Math.max(0, next.movesLeft - penalty);
         return {
           ...next,
           taskTimeLeft: state.level.taskTimerSeconds ?? 0,
           movesLeft,
-          timeoutsUsed: 1,
-          // 步数被扣到 0 也算失败
+          timeoutsUsed: used + 1,
           phase: movesLeft <= 0 ? 'lost' : 'idle',
         };
       }
@@ -1380,7 +1450,14 @@ export function sweepEarned(state: GameState): number {
 export function canSweepNow(state: GameState): boolean {
   if (state.phase !== 'idle') return false;
   if (state.seqIndex >= state.level.targetChain.length) return false;
-  return sweepEarned(state) > state.sweepUsed;
+  // 前几关不开放跳过（skipsAllowed === 0）
+  if ((state.level.skipsAllowed ?? 2) <= 0) return false;
+  return sweepEarned(state) > state.sweepUsed && state.sweepUsed < (state.level.skipsAllowed ?? 2);
+}
+
+/** 这一关是否开放跳过功能（给 UI 决定要不要显示按钮） */
+export function skipsEnabled(level: LevelConfig): boolean {
+  return (level.skipsAllowed ?? 2) > 0;
 }
 
 /**

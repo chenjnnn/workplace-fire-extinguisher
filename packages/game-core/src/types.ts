@@ -335,6 +335,11 @@ export interface LevelConfig {
    */
   sweepMode?: 'score' | 'limited';
   /**
+   * 这一关允许跳过几次（不填 = 2）。
+   * 设为 0 时整关不显示跳过按钮 —— 前 3 关用这个，避免一开始就有太多按钮。
+   */
+  skipsAllowed?: number;
+  /**
    * 收网的激活分数（两次）。
    *
    * 用户的要求：「设计一个分数，完成多少分之后第一次激活，完成多少分之后第二次激活」。
@@ -402,6 +407,12 @@ export interface ComboEvent {
   type: VillainType;
   /** 这一手被加班魔反咬扣掉的分（0 = 没扣） */
   bitten?: number;
+  /**
+   * 给玩家的轻提示（飘字用）。
+   *   'next-target' —— 顺带消到了下一个目标色（给分但不推进）
+   *   'chain-target' —— 连锁消到了当前目标色（不推进，给少量跳过进度）
+   */
+  hint?: { kind: 'next-target' | 'chain-target'; points: number };
   /** 发生在第几步 */
   move: number;
   /**

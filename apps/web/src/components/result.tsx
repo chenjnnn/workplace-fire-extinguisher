@@ -59,19 +59,36 @@ export function ResultOverlay({
             : '再来一次就能清干净'}
       </p>
 
-      {/* 失败：还差什么颜色 */}
+      {/* 失败：还差第几格 + 整条链的完成状态（A12） */}
       {!won && (
         <section className="mt-3 rounded-xl bg-white/86 px-4 py-3">
-          <p className="text-[11px] font-medium text-[#a89e93]">还差</p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            {missingTargets(state).map((m, i) => (
-              <span
-                key={i}
-                className="flex items-center gap-1 rounded-full bg-[#fff1e6] px-2.5 py-1 text-[12px] font-bold text-[#c2410c]"
-              >
-                {VILLAINS[m.type].name} × {m.left}
-              </span>
-            ))}
+          <p className="text-[11px] font-medium text-[#a89e93]">
+            还差第 {Math.min(state.seqIndex + 1, state.level.targetChain.length)} 格：
+            <span className="ml-1 font-bold text-[#c2410c]">
+              {VILLAINS[state.level.targetChain[state.seqIndex] ?? mainBoss].name}
+            </span>
+          </p>
+
+          {/* 整条链：已完成打勾、当前高亮、后面压暗 */}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {state.level.targetChain.map((t, i) => {
+              const done = i < state.seqIndex;
+              const current = i === state.seqIndex;
+              const color = VILLAINS[t].color;
+              return (
+                <span
+                  key={i}
+                  className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"
+                  style={{
+                    backgroundColor: done ? '#dcfce7' : current ? `${color}22` : '#f5f0e8',
+                    color: done ? '#16a34a' : current ? color : '#c9bda9',
+                    border: current ? `1.5px solid ${color}` : '1.5px solid transparent',
+                  }}
+                >
+                  {done ? '✓' : i + 1} {VILLAINS[t].name}
+                </span>
+              );
+            })}
           </div>
         </section>
       )}
