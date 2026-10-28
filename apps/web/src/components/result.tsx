@@ -35,6 +35,7 @@ export function ResultOverlay({
 }) {
   const won = state.phase === 'won';
   const summary = summarize(state);
+  const endlessRun = runKind === 'endless';
   const stars = computeStars(state);
   const avatar = useMemo(() => loadSave().avatar, []);
   const persona = avatarPersona(avatar);
@@ -53,6 +54,22 @@ export function ResultOverlay({
    */
   const hasNext =
     won && (runKind === 'main' ? nextLevel <= TOTAL_LEVELS : true);
+
+  /** 无尽模式专用的标题（普通模式走原来的文案） */
+  const headline =
+    runKind === 'endless'
+      ? won
+        ? `扛过第 ${stage} 关`
+        : `倒在加班第 ${stage} 关`
+      : null;
+
+  /**
+   * 无尽模式失败：直接给「从第 1 关重来」。
+   *
+   * 用户要求补上「死亡重来」——
+   * 之前失败只能回无尽页再点开始，多两步；现在一键重开。
+   */
+  const endlessRetryHref = '/play/?endless=1';
   const nextHref =
     runKind === 'daily'
       ? '/daily/'
@@ -72,7 +89,7 @@ export function ResultOverlay({
       <h1
         className={`text-center text-3xl font-black ${won ? 'text-[#f59e0b]' : 'text-[#4a423b]'}`}
       >
-        {won ? '清场完成' : '差一点'}
+        {headline ?? (won ? '清场完成' : '差一点')}
       </h1>
       <p className="mt-1 text-center text-sm text-[#a89e93]">
         {won
@@ -286,6 +303,13 @@ export function ResultOverlay({
               className="block w-full rounded-full bg-[#ff6b4a] py-3.5 text-center text-[15px] font-display text-white active:scale-[0.98]"
             >
               {nextLabel}
+            </Link>
+          ) : runKind === 'endless' ? (
+            <Link
+              href={endlessRetryHref}
+              className="block w-full rounded-full bg-[#7c3aed] py-3.5 text-center text-[15px] font-display text-white active:scale-[0.98]"
+            >
+              从第 1 关重来
             </Link>
           ) : (
             <button

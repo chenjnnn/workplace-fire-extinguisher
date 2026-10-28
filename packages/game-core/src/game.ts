@@ -226,6 +226,32 @@ export function createGameWithLevel(
 
   let board = generateBoard(level, rng);
 
+  /**
+   * 「空降领导」词缀：开局把随机 N 格换成同一种颜色。
+   *
+   * 效果是让棋盘一开始就更"整齐"，但那种整齐是陷阱 ——
+   * 玩家会以为凑得很顺，实际上目标色反而更难找。
+   */
+  if (level.openingCluster && level.openingCluster > 0) {
+    const clusterType = rng.pick(level.types);
+    const spots: Array<{ row: number; col: number }> = [];
+    for (let r = 0; r < level.rows; r += 1) {
+      for (let c = 0; c < level.cols; c += 1) spots.push({ row: r, col: c });
+    }
+    rng.shuffle(spots);
+    for (let i = 0; i < Math.min(level.openingCluster, spots.length); i += 1) {
+      const sp = spots[i]!;
+      const cell = getCell(board, sp.row, sp.col);
+      if (cell) {
+        board[sp.row]![sp.col] = {
+          ...cell,
+          type: clusterType,
+          hp: VILLAINS[clusterType].hp + (level.hpBoost?.[clusterType] ?? 0),
+        };
+      }
+    }
+  }
+
   // 极端情况：生成出来的棋盘无解，重排
   let attempts = 0;
   while (!findHint(board) && attempts < 10) {
@@ -468,6 +494,8 @@ function clearMatches(
   chainCap = 2.6,
   /** 当前任务目标色：加班魔是目标时不反咬 */
   targetType?: VillainType | null,
+  /** 关卡配置（拿词缀加成：加班反噬倍率、形式主义爆裂半径） */
+  level?: LevelConfig,
 ): ClearOutcome {
   const next = board.map((row) => [...row]);
   const events: ComboEvent[] = [];
@@ -512,7 +540,11 @@ function clearMatches(
        * 那是玩家在干正事，不该被惩罚；只有消「非目标的加班魔」才反咬。
        */
       if (type === 'overtime' && targetType !== 'overtime') {
+        // 「加班反噬」词缀让扣分翻倍
         overtimePenalty += 0.2;
+        if (level?.overtimeBiteScale && level.overtimeBiteScale > 1) {
+          overtimePenalty += 0.2 * (level.overtimeBiteScale - 1);
+        }
       }
 
       // 保护伞：十字爆裂（上下左右 2 格）
@@ -520,6 +552,8 @@ function clearMatches(
       // 清一列可能带出更多伞，更多伞又清更多列，实测平均清掉 176 格（棋盘才 64 格）。
       // 改成固定半径后强度可控，也更容易让玩家预测。
       if (type === 'formalist') {
+        // 「形式主义」词缀让爆裂半径 +1 格（最多加到 3）
+        const extra = Math.max(0, Math.min(1, level?.formalistBlastBonus ?? 0));
         const blast = [
           { row: coord.row - 1, col: coord.col },
           { row: coord.row + 1, col: coord.col },
@@ -530,6 +564,14 @@ function clearMatches(
           { row: coord.row, col: coord.col - 2 },
           { row: coord.row, col: coord.col + 2 },
         ];
+        if (extra > 0) {
+          blast.push(
+            { row: coord.row - 3, col: coord.col },
+            { row: coord.row + 3, col: coord.col },
+            { row: coord.row, col: coord.col - 3 },
+            { row: coord.row, col: coord.col + 3 },
+          );
+        }
         for (const b of blast) {
           if (!inBounds(next, b.row, b.col)) continue;
           const target = getCell(next, b.row, b.col);
@@ -730,6 +772,7 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
       move,
       state.modeConfig.chainCap,
       state.level.targetChain[seqIndex] ?? null,
+      state.level,
     );
     board = outcome.board;
     score += outcome.score;
@@ -810,6 +853,15 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
       } else if (taskStreak === 8) {
         score += 600;
         pendingReward = { kind: 'score', amount: 600, streak: 8 };
+      }
+
+      /**
+       * 「背锅侠」词缀：每完成 3 格任务额外扣 1 步。
+       * 对应「干得越多，锅越多」。
+       */
+      const stepPenalty = state.level.taskStepPenalty ?? 0;
+      if (stepPenalty > 0 && seqIndex % 3 === 0) {
+        movesLeft = Math.max(0, movesLeft - stepPenalty);
       }
     }
 
@@ -921,6 +973,22 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     reshuffled = true;
     // 洗牌后保证当前目标色至少出现 3 个，否则玩家还是没得打
     board = ensureTargetPresent(board, state, rng);
+  }
+
+  /**
+   * 「团建强制」词缀：每走 N 步强制洗一次牌。
+   *
+   * 不管棋盘是不是死局，到点就洗 —— 打乱玩家攒好的局面，
+   * 对应「团建总是挑你有安排的时候」。
+   */
+  const every = state.level.forcedReshuffleEvery ?? 0;
+  if (!reshuffled && every > 0) {
+    const movesDone = state.level.moves - movesLeft;
+    if (movesDone > 0 && movesDone % every === 0) {
+      board = shuffleBoard(board, state.level, rng);
+      reshuffled = true;
+      board = ensureTargetPresent(board, state, rng);
+    }
   }
 
   let next: GameState = {
