@@ -90,6 +90,10 @@ export interface HudSnapshot {
   sweepRatio: number;
   /** 下一次门槛的分数 */
   sweepNextScore: number;
+  /** 待展示的连击奖励卡（null = 没有） */
+  pendingReward: { kind: 'score' | 'moves'; amount: number; streak: number } | null;
+  /** 当前连击数（连续完成任务次数） */
+  taskStreak: number;
   mode: GameMode;
   modeName: string;
   rescues: Array<{
@@ -411,6 +415,14 @@ export class GameEngine {
    */
   setUiPaused(v: boolean): void {
     this.uiPaused = v;
+  }
+
+  /** 玩家关掉奖励卡 */
+  clearReward(): void {
+    if (!this.state.pendingReward) return;
+    this.state = { ...this.state, pendingReward: null };
+    this.uiPaused = false;
+    this.emitHud();
   }
 
   /** 延后重算布局（等 React 把结算页撤掉、容器恢复真实尺寸） */
@@ -1584,6 +1596,8 @@ export class GameEngine {
       sweepEarnedCount: sweepEarned(s),
       sweepRatio: sweepProgress(s).ratio,
       sweepNextScore: sweepProgress(s).to,
+      pendingReward: s.pendingReward,
+      taskStreak: s.taskStreak,
       mode: s.mode,
       modeName: s.modeConfig.name,
       sweepUsed: s.sweepUsed,

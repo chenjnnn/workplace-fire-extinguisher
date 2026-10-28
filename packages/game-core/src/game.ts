@@ -176,6 +176,8 @@ export function createGame(levelId: number, seed?: number, mode: GameMode = 'nor
     offTargetCleared: 0,
     sweepScore: 0,
     offTargetStreak: 0,
+    taskStreak: 0,
+    pendingReward: null,
     skipsUsed: 0,
     rescuedCount: 0,
     lostCount: 0,
@@ -589,6 +591,8 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
   let offTargetCleared = state.offTargetCleared;
   let sweepScore = state.sweepScore;
   let offTargetStreak = state.offTargetStreak;
+  let taskStreak = state.taskStreak;
+  let pendingReward = state.pendingReward;
   // 这一手的得分（在循环里按 chain 累加，用于决定收网积分）
   let gainedThisMove = 0;
   /**
@@ -667,6 +671,24 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
       seqProgress = 0;
       // 完成任务：连消计数清零
       offTargetStreak = 0;
+
+      /**
+       * 连击奖励（用户的要求）：
+       *   · 连续完成 2 次任务 → 分数奖励
+       *   · 连续完成 4 次任务 → 步数奖励
+       *   · 中间有任何「非任务操作」（消非目标色 / 跳过）都会打断连击
+       *
+       * 原来这里是「问答卡」，用户要求删掉问答、改成这个。
+       */
+      taskStreak += 1;
+      if (taskStreak === 2) {
+        score += 600;
+        pendingReward = { kind: 'score', amount: 600, streak: 2 };
+      } else if (taskStreak >= 4) {
+        movesLeft += 2;
+        pendingReward = { kind: 'moves', amount: 2, streak: 4 };
+        taskStreak = 0;
+      }
     }
 
     /**
@@ -680,7 +702,11 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
       for (const [type, count] of Object.entries(outcome.counts)) {
         if (type !== target) offTargetCleared += count ?? 0;
       }
-      if (isFirstWave) offTargetStreak += 1;
+      if (isFirstWave) {
+        offTargetStreak += 1;
+        // 消了非目标色 = 打断连击
+        taskStreak = 0;
+      }
     }
     {
       const mode = state.level.sweepMode ?? 'score';
@@ -757,6 +783,8 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     levelTimeLeft: state.levelTimeLeft,
     sweepScore,
     offTargetStreak,
+    taskStreak,
+    pendingReward,
     // 囚车（按颜色顺序）的进度
     seqIndex,
     seqProgress,
@@ -918,7 +946,13 @@ function bumpCounts(
  * 正确做法：看「跨过了几道 12 的门槛」，和已经答过的题数比较。
  */
 export function shouldTriggerQuiz(state: GameState): boolean {
-  // 关卡已经结束（通关 / 失败）就不该再弹题目了
+  /**
+   * 用户要求：「删掉问题卡这一功能」，改成连击奖励。
+   * 所以这里直接返回 false，问答系统整体下线（代码保留，以后想恢复改这里）。
+   */
+  return false;
+}
+function shouldTriggerQuizLegacy(state: GameState): boolean {
   if (state.phase !== 'idle') return false;
   if (state.pendingQuiz) return false;
   // 每局有上限，避免大关卡一直被打断
@@ -1267,6 +1301,8 @@ export function triggerSweep(
     seqIndex,
     seqProgress: 0,
     sweepUsed: state.sweepUsed + 1,
+    // 跳过不算「完成任务」，会打断连击
+    taskStreak: 0,
   };
 
   // 如果这一跳正好让链走完，就直接判通关

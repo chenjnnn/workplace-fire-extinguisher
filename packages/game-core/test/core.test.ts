@@ -26,6 +26,7 @@ import {
   resolveStep,
   triggerSweep,
   tickTimer,
+  shouldTriggerQuiz,
   canSweepNow,
   DEFAULT_SWEEP_THRESHOLDS,
   trySwap,
@@ -785,4 +786,79 @@ test('把「看过的问题」带进来之后不会重复抽到', () => {
   const { quiz, usedIds } = drawQuiz(12345, seen);
   assert.equal(quiz.id, all[all.length - 1], '只剩一道没看过，应该抽它');
   assert.equal(usedIds.length, all.length, '抽完就把全部题都标成看过');
+});
+
+test('问答系统已下线（改由连击奖励取代）', () => {
+  const game = createGame(1, 42);
+  const many = { ...game, totalCleared: 200, quizzesTaken: 0 };
+  assert.equal(shouldTriggerQuiz(many), false, '任何情况下都不该再弹题');
+});
+
+// ---------------------------------------------------------------- 连击奖励
+test('连续完成 2 次任务给分数奖励', () => {
+  const base = createGame(1, 42);
+  // 链是 pua, shirk, overtime；造两次不同目标色的三连
+  const c0 = base.level.targetChain[0]!;
+  const c1 = base.level.targetChain[1]!;
+
+  // 第一次：消 c0 → streak 1
+  const b1 = withTiles(base.board, [
+    [3, 0, c0],
+    [3, 1, c0],
+    [3, 2, c0],
+  ]);
+  const r1 = resolveStep({ ...base, board: b1, movesLeft: 20 }, createRng(5));
+  assert.equal(r1.state.seqIndex, 1);
+  assert.equal(r1.state.taskStreak, 1, '第一次完成后 streak 应该是 1');
+
+  // 第二次：消 c1 → streak 2 → 分数奖励
+  const b2 = withTiles(r1.state.board, [
+    [5, 0, c1],
+    [5, 1, c1],
+    [5, 2, c1],
+  ]);
+  const r2 = resolveStep({ ...r1.state, board: b2, movesLeft: 19 }, createRng(7));
+  assert.equal(r2.state.taskStreak, 2);
+  assert.ok(r2.state.pendingReward, '应该有一张待展示的奖励卡');
+  assert.equal(r2.state.pendingReward?.kind, 'score');
+});
+
+test('中间消了非目标色会打断连击', () => {
+  const base = createGame(1, 42);
+  const c0 = base.level.targetChain[0]!;
+
+  const b1 = withTiles(base.board, [
+    [3, 0, c0],
+    [3, 1, c0],
+    [3, 2, c0],
+  ]);
+  const r1 = resolveStep({ ...base, board: b1, movesLeft: 20 }, createRng(5));
+  assert.equal(r1.state.taskStreak, 1);
+
+  // 关键：要挑一个**不等于当前目标**的颜色
+  const nextTarget = r1.state.level.targetChain[r1.state.seqIndex]!;
+  const other = (['shirk', 'overtime', 'grafter', 'formalist', 'flatterer'] as const).find(
+    (t) => t !== nextTarget,
+  )!;
+  assert.notEqual(other, nextTarget);
+
+  const b2 = withTiles(r1.state.board, [
+    [5, 6, other],
+    [5, 5, other],
+    [5, 4, other],
+  ]);
+  const r2 = resolveStep({ ...r1.state, board: b2, movesLeft: 19 }, createRng(7));
+  assert.equal(r2.state.taskStreak, 0, '消非目标色应该把连击打断');
+});
+
+test('跳过会打断连击', () => {
+  const base = createGame(4, 42);
+  const rich = {
+    ...base,
+    sweepScore: DEFAULT_SWEEP_THRESHOLDS[0] + 10,
+    taskStreak: 1,
+  };
+  const res = triggerSweep(rich, 'grafter', createRng(1));
+  assert.equal(res.ok, true);
+  assert.equal(res.state.taskStreak, 0, '跳过不算完成任务，连击要断');
 });

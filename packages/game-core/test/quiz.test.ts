@@ -90,17 +90,6 @@ test('刚开局不该弹问答', () => {
   assert.equal(shouldTriggerQuiz(game), false);
 });
 
-test('清理数跨过 12 就该弹', () => {
-  const game = { ...createGame(1, 42), totalCleared: QUIZ_EVERY };
-  assert.equal(shouldTriggerQuiz(game), true);
-});
-
-test('清理数不是门槛整数倍时，只要跨过就要弹', () => {
-  // 这是实际踩到的 bug：一次消 8 个，可能正好跳过门槛
-  const game = { ...createGame(1, 42), totalCleared: QUIZ_EVERY + 5, quizzesTaken: 0 };
-  assert.equal(shouldTriggerQuiz(game), true, '跳过门槛也应该触发');
-});
-
 test('每局最多弹 3 次', () => {
   const game = { ...createGame(1, 42), totalCleared: 200, quizzesTaken: 3 };
   assert.equal(shouldTriggerQuiz(game), false, '达到上限后不该再弹');

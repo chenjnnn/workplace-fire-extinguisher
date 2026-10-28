@@ -34,7 +34,7 @@ import { PrisonVan } from '@/components/prison-van';
 import { RescueBar } from '@/components/rescue-bar';
 import { SceneIntro } from '@/components/scene-intro';
 import { Tutorial } from '@/components/tutorial';
-import { QuizModal } from '@/components/quiz-modal';
+import { RewardModal } from '@/components/reward-modal';
 
 function MiniStat({
   label,
@@ -77,41 +77,10 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
       setShowTutorial(true);
     }
   }, []);
-  /** 问答：选完之后的结果 */
-  const [quizResult, setQuizResult] = useState<{
-    granted: { name: string; icon: string; effectText: string; desc: string } | null;
-    verdict: { title: string; detail: string; grade: 'good' | 'meh' | 'bad' } | null;
-    stars: number;
-    gainedScore: number;
-    correctIndex: number;
-  } | null>(null);
-  /**
-   * 当前正在展示的题。
-   *
-   * 为什么不能直接用 hud.pendingQuiz：
-   * 答题后引擎会立刻清空 pendingQuiz，弹窗会瞬间消失，
-   * 玩家根本看不到「我选对了吗、拿到了什么」。
-   * 所以弹窗出现时把题目快照下来，直到玩家点「继续打」才释放。
-   */
-  const [activeQuiz, setActiveQuiz] = useState<NonNullable<HudSnapshot['pendingQuiz']> | null>(null);
-
+  // 奖励卡打开期间暂停倒计时
   useEffect(() => {
-    if (hud?.pendingQuiz && activeQuiz === null) {
-      setActiveQuiz(hud.pendingQuiz);
-      setQuizResult(null);
-    }
-  }, [hud?.pendingQuiz, activeQuiz]);
-
-  /**
-   * 只要问答弹窗（出题 + 奖励卡）还开着，就暂停倒计时。
-   *
-   * 注意要盯 activeQuiz 而不是 hud.pendingQuiz：
-   * 答题后引擎已经把 pendingQuiz 清掉了，但奖励卡还在，
-   * 那种时候不该开始计时。
-   */
-  useEffect(() => {
-    engineRef.current?.setUiPaused(activeQuiz !== null);
-  }, [activeQuiz]);
+    engineRef.current?.setUiPaused((hud?.pendingReward ?? null) !== null);
+  }, [hud?.pendingReward]);
   const [finished, setFinished] = useState<GameState | null>(null);
   const [share, setShare] = useState<ShareData | null>(null);
   const [avatar, setAvatar] = useState<AvatarConfig | null>(null);
@@ -285,8 +254,7 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
     return <SceneIntro level={level} scene={scene} onStart={() => setBriefed(true)} />;
   }
 
-  const quiz = activeQuiz;
-  const showQuiz = quiz !== null;
+  const reward = hud?.pendingReward ?? null;
 
   return (
     <main className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col bg-[#fff8ec] px-3 pb-2 pt-2">
@@ -307,33 +275,14 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
         </div>
       )}
 
-      {showQuiz && (
-        <QuizModal
-          prompt={quiz.prompt}
-          bossName={quiz.bossName}
-          bossType={quiz.bossType}
-          options={quiz.options}
-          result={quizResult}
-          onAnswer={(i) => {
-            const r = engineRef.current?.answerQuizOption(i) ?? null;
-            setQuizResult(
-              r
-                ? {
-                    granted: r.granted,
-                    verdict: r.verdict,
-                    stars: r.stars,
-                    gainedScore: r.gainedScore,
-                    correctIndex: r.correctIndex,
-                  }
-                : null,
-            );
-          }}
-          onClose={() => {
-            setActiveQuiz(null);
-            setQuizResult(null);
-          }}
+      {/* 连击奖励卡（取代原来的问答卡） */}
+      {reward && (
+        <RewardModal
+          reward={reward}
+          onClose={() => engineRef.current?.clearReward()}
         />
       )}
+
       {/* 顶栏 */}
       <header className="flex shrink-0 items-center justify-between gap-2 px-1">
         <Link

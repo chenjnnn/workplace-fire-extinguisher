@@ -457,6 +457,22 @@ export interface GameState {
   sweepScore: number;
   /** 当前任务期间，已经连续消了几次非目标色（完成任务时清零） */
   offTargetStreak: number;
+  /**
+   * 连续完成任务的次数（中间不能有任何非任务操作）。
+   *
+   * 2 次 → 分数奖励；4 次 → 步数奖励。跳过和消非目标色都会打断它。
+   */
+  taskStreak: number;
+  /**
+   * 待展示的奖励卡（给 UI 用）。
+   * 引擎写入后由界面取走显示，玩家关掉卡片再继续。
+   */
+  pendingReward: {
+    kind: 'score' | 'moves';
+    amount: number;
+    /** 达到这个连击数时发的 */
+    streak: number;
+  } | null;
   /** 已经跳过了几次 */
   skipsUsed: number;
   /** 整局累计的救援结果，给结算页用 */
