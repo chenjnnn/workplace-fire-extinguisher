@@ -31,6 +31,13 @@ export interface SaveData {
   soundOn: boolean;
   /** 是否看过「虚构角色声明」 */
   disclaimerAck: boolean;
+  /**
+   * 已经看过的问题 id（跨局累积）。
+   *
+   * 用户的要求：「在这个游戏内，玩家只要看过这个问题，就不能再出现第二遍」。
+   * 所以不能用每局重置的内存数组，必须落盘。
+   */
+  quizSeen: string[];
 }
 
 export function defaultSave(): SaveData {
@@ -46,6 +53,7 @@ export function defaultSave(): SaveData {
     avatar: { ...DEFAULT_AVATAR },
     soundOn: true,
     disclaimerAck: false,
+    quizSeen: [],
   };
 }
 
@@ -66,6 +74,7 @@ export function loadSave(): SaveData {
       avatar: sanitizeAvatar(parsed.avatar ?? base.avatar),
       soundOn: typeof parsed.soundOn === 'boolean' ? parsed.soundOn : true,
       disclaimerAck: Boolean(parsed.disclaimerAck),
+      quizSeen: Array.isArray(parsed.quizSeen) ? parsed.quizSeen.filter((x) => typeof x === 'string') : [],
     };
   } catch {
     return defaultSave();

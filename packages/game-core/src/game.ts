@@ -617,6 +617,19 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     // 当前是第几波匹配（1 = 玩家这次交换直接产生的）
     const chain_i = chain;
 
+    /**
+     * 这一波**匹配到**的类型（含只是掉血、没被清掉的）。
+     *
+     * 为什么需要它：抢功精有 2 滴血，第一次消除只掉血、不消失，
+     * 所以 outcome.counts 里没有它 —— 任务就推进不了，玩家看到消除动画却「卡住」。
+     * 任务判定按「匹配到」算，符合玩家直觉。
+     */
+    const matchedTypes = new Set<VillainType>();
+    for (const m of matches) {
+      const t = getCell(board, m.row, m.col);
+      if (t) matchedTypes.add(t.type);
+    }
+
     const outcome = clearMatches(board, matches, chain, move, state.modeConfig.chainCap);
     board = outcome.board;
     score += outcome.score;
@@ -628,54 +641,51 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     // 这一手（含连锁）累计的得分，用来决定要不要计入收网进度
     gainedThisMove += outcome.score;
 
+    // 累计清理数（这里只看真正被消掉的，用于统计和展示）
     for (const [type, count] of Object.entries(outcome.counts)) {
       const key = type as VillainType;
       clearedCount[key] = (clearedCount[key] ?? 0) + (count ?? 0);
+    }
 
-      /**
-       * 任务链推进规则（用户反复强调的一条）：
-       *
-       *   「顺手消掉的颜色不能算任务完成」——
-       *   本关要蓝色，你消蓝色时正好带掉了粉色，粉色不该算完成。
-       *
-       * 所以只认**第一波匹配**（chain === 1，也就是玩家这次交换直接产生的那些），
-       * 而且整手只推进一次。连锁掉下来的、顺带消掉的，全部不算。
-       *
-       * 同色连续格例外：链是 [蓝,蓝,粉] 时，一次三连蓝可以同时完成两格蓝 ——
-       * 那不是「顺手」，是同一种颜色连续达成。
-       */
-      const chain = state.level.targetChain;
-      const isFirstWave = chain_i === 1;
-      if (isFirstWave && !advancedThisMove && key === chain[seqIndex]) {
-        advancedThisMove = true;
-        /**
-         * 一次操作只推进一格 —— 哪怕链上后面几格是同色。
-         *
-         * 用户的原话：「只完成一个任务、没有后续操作的情况下，后一个任务也被完成了」。
-         * 之前我保留了「同色连续可以一手连过」的特殊规则，
-         * 而第 1、2 关的链恰好是 pua,pua,...，所以消一次就过了两格。
-         * 现在取消这个例外：每一格都必须由独立的一次操作来完成。
-         */
-        seqIndex += 1;
-        seqProgress = 0;
-        // 完成任务：连消计数清零，这一手的分数照常计入收网进度
-        offTargetStreak = 0;
+    /**
+     * ============ 任务链推进 ============
+     *
+     * 关键点（这里踩过三次坑）：
+     *   1. 用「这一波**匹配到**的类型」判断，而不是「被清掉的类型」。
+     *      抢功精有 2 滴血，第一次消除只是掉血，outcome.counts 是**空的** ——
+     *      如果在这里面判断，推进逻辑压根不会执行，玩家会看到「完成任务但囚车不动」。
+     *   2. 只认第一波匹配（chain_i === 1），连锁掉下来的不算。
+     *   3. 整手只推进一次，而且一次只推一格。
+     */
+    const targetChain = state.level.targetChain;
+    const target = targetChain[seqIndex];
+    const isFirstWave = chain_i === 1;
+
+    if (isFirstWave && !advancedThisMove && target && matchedTypes.has(target)) {
+      advancedThisMove = true;
+      seqIndex += 1;
+      seqProgress = 0;
+      // 完成任务：连消计数清零
+      offTargetStreak = 0;
+    }
+
+    /**
+     * ============ 收网积分 ============
+     *
+     * 'score'   —— 只要分数涨就算攒（前 10 关）
+     * 'limited' —— 只认「完成任务前 3 次非目标消除」的分；
+     *              第 4 次起分数照常涨，但不进收网进度。
+     */
+    if (!advancedThisMove || !target || !matchedTypes.has(target)) {
+      for (const [type, count] of Object.entries(outcome.counts)) {
+        if (type !== target) offTargetCleared += count ?? 0;
+      }
+      if (isFirstWave) offTargetStreak += 1;
+    }
+    {
+      const mode = state.level.sweepMode ?? 'score';
+      if (mode === 'score' || offTargetStreak <= 3) {
         sweepScore += gainedThisMove;
-      } else {
-        offTargetCleared += count ?? 0;
-        offTargetStreak += 1;
-
-        /**
-         * 收网积分规则：
-         *   'score'   —— 只要分数涨就算攒（前 10 关）
-         *   'limited' —— 只认「完成任务前 3 次非目标消除」的分；
-         *                第 4 次起分数照常涨，但不进收网进度，
-         *                这样「一直消别的颜色攒跳过、把任务全跳过去」就不成立了。
-         */
-        const mode = state.level.sweepMode ?? 'score';
-        if (mode === 'score' || offTargetStreak <= 3) {
-          sweepScore += gainedThisMove;
-        }
       }
     }
 

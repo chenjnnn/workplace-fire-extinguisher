@@ -127,6 +127,10 @@ export interface EngineOptions {
   onHud: (snapshot: HudSnapshot) => void;
   onCombo?: (event: ComboEvent) => void;
   onFinish?: (state: GameState) => void;
+  /** 已经看过的问题 id（跨局累积，从存档读进来） */
+  quizSeen?: string[];
+  /** 又看了一道题，通知外面落盘 */
+  onQuizSeen?: (ids: string[]) => void;
 }
 
 // ---------------------------------------------------------------- 内部类型
@@ -218,8 +222,9 @@ export class GameEngine {
   private paused = false;
   /** UI 遮挡（问答弹窗、奖励卡）时暂停倒计时 */
   private uiPaused = false;
+  /** 已经看过的问题 id：从存档读进来，跨局累积 */
   private quizUsedIds: string[] = [];
-  /** 答题后的回调，用来把 usedIds 存进 localStorage */
+  /** 又看了一道题，通知外面落盘 */
   private onQuizUsed?: (ids: string[]) => void;
   /** 一次答题的浮层提示 */
   private quizToast: { text: string; kind: 'good' | 'bad' } | null = null;
@@ -259,6 +264,9 @@ export class GameEngine {
 
   constructor(options: EngineOptions) {
     this.options = options;
+    // 把「看过的问题」从存档带进来 —— 跨局不重复靠它
+    this.quizUsedIds = [...(options.quizSeen ?? [])];
+    this.onQuizUsed = options.onQuizSeen;
     this.canvas = options.canvas;
     const ctx = this.canvas.getContext('2d');
     if (!ctx) throw new Error('浏览器不支持 canvas 2d');

@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createRng, seedFromDate } from '../src/rng.ts';
-import { QUIZZES } from '../src/quiz.ts';
+import { QUIZZES, drawQuiz } from '../src/quiz.ts';
 import {
   applyGravity,
   findHint,
@@ -761,4 +761,28 @@ test('连锁消到下一格的颜色也不算完成', () => {
   ]);
   const { state: s } = resolveStep({ ...base, board, movesLeft: 20 }, createRng(9));
   assert.ok(s.seqIndex <= 1, `连锁不该多推，实际 ${s.seqIndex}`);
+});
+
+test('2 血角色（抢功精）第一次消除就能推进任务', () => {
+  // 回归：抢功精 hp=2，第一次消只掉血，outcome.counts 是空的，
+  // 之前推进逻辑写在那个循环里 → 永远不执行 → 玩家看到「完成任务但囚车不动」
+  const base = createGame(4, 42);
+  const first = base.level.targetChain[0]!;
+  assert.equal(first, 'grafter', 'L4 第一格应该是抢功精');
+
+  const board = withTiles(base.board, [
+    [3, 0, first],
+    [3, 1, first],
+    [3, 2, first],
+  ]);
+  const { state: next } = resolveStep({ ...base, board, movesLeft: 20 }, createRng(5));
+  assert.equal(next.seqIndex, 1, `2 血角色消一次也该推进，实际 ${next.seqIndex}`);
+});
+
+test('把「看过的问题」带进来之后不会重复抽到', () => {
+  const all = QUIZZES.map((q) => q.id);
+  const seen = all.slice(0, all.length - 1); // 只看剩最后一道没看过
+  const { quiz, usedIds } = drawQuiz(12345, seen);
+  assert.equal(quiz.id, all[all.length - 1], '只剩一道没看过，应该抽它');
+  assert.equal(usedIds.length, all.length, '抽完就把全部题都标成看过');
 });
