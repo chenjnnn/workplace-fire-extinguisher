@@ -698,20 +698,24 @@ test('一次操作只推进一格：顺手消掉下一个颜色不算完成', ()
   );
 });
 
-test('同色连续格仍然可以一手推多格', () => {
+test('同色连续格也只推一格（没有例外）', () => {
   // L1 链是 pua, pua, shirk —— 前两格同色
   const base = createGame(1, 42);
   const c0 = base.level.targetChain[0]!;
   assert.equal(base.level.targetChain[1], c0, 'L1 前两格应该是同色');
 
-  // 消一排 3 个当前色 → 应该同时完成前两格
+  // 消一排 3 个当前色 → 只该完成第一格；第二格需要再消一次
   const board = withTiles(base.board, [
     [3, 0, c0],
     [3, 1, c0],
     [3, 2, c0],
   ]);
   const { state: next } = resolveStep({ ...base, board, movesLeft: 20 }, createRng(5));
-  assert.ok(next.seqIndex >= 2, `同色连续应该一次推两格，实际 ${next.seqIndex}`);
+  assert.equal(
+    next.seqIndex,
+    1,
+    `一次操作只该推进一格，实际 ${next.seqIndex}（链：${base.level.targetChain.join(',')}）`,
+  );
 });
 
 test('第一波同时消两色时，只有当前目标色推进（不分颜色）', () => {

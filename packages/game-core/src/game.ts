@@ -648,11 +648,15 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
       const isFirstWave = chain_i === 1;
       if (isFirstWave && !advancedThisMove && key === chain[seqIndex]) {
         advancedThisMove = true;
+        /**
+         * 一次操作只推进一格 —— 哪怕链上后面几格是同色。
+         *
+         * 用户的原话：「只完成一个任务、没有后续操作的情况下，后一个任务也被完成了」。
+         * 之前我保留了「同色连续可以一手连过」的特殊规则，
+         * 而第 1、2 关的链恰好是 pua,pua,...，所以消一次就过了两格。
+         * 现在取消这个例外：每一格都必须由独立的一次操作来完成。
+         */
         seqIndex += 1;
-        // 连续同色：这一手可以继续往下填
-        while (seqIndex < chain.length && chain[seqIndex] === key) {
-          seqIndex += 1;
-        }
         seqProgress = 0;
         // 完成任务：连消计数清零，这一手的分数照常计入收网进度
         offTargetStreak = 0;
