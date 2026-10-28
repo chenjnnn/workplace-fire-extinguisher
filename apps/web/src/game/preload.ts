@@ -433,23 +433,17 @@ export function drawTileSprite(
 
   // ---- 毒雾（甩锅侠甩出的锅）
   /**
-   * 中毒标记 —— 用户反馈「虚线框和右下角图标看不懂」，所以做得很克制：
-   * 只在头像内部加一圈很淡的暗色内阴影，不改底色、不加图标。
+   * 中毒（甩锅侠污染）—— **不再做任何视觉标记**。
    *
-   * 中毒的实际影响（要再消一次）会通过「没消掉」本身被玩家感知到，
-   * 不需要额外的视觉符号。
+   * 用户的要求：「每一个颜色的头像在方格中都有一个对应的颜色深一点点的头像，
+   * 确保同一种颜色的头像都是一样的」。
+   * 那个「深一点点」就是这里的暗角。现在彻底去掉：
+   * 同一种颜色在棋盘上长得完全一致，靠底色认角色，不靠明暗认状态。
+   *
+   * 代价：玩家不会提前看出哪一格中了毒（要消两次），
+   * 只能靠「没消掉」本身感知。规则说明里会写明这一点。
    */
-  if (poisoned) {
-    ctx.save();
-    circle(ctx, cx, cy, r);
-    ctx.clip();
-    const grad = ctx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
-    grad.addColorStop(0, 'rgba(0,0,0,0)');
-    grad.addColorStop(1, 'rgba(0,0,0,0.26)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-    ctx.restore();
-  }
+  void poisoned;
 
   ctx.restore();
 }
