@@ -614,6 +614,8 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     hadMatch = true;
     chain += 1;
     maxChain = Math.max(maxChain, chain);
+    // 当前是第几波匹配（1 = 玩家这次交换直接产生的）
+    const chain_i = chain;
 
     const outcome = clearMatches(board, matches, chain, move, state.modeConfig.chainCap);
     board = outcome.board;
@@ -631,14 +633,20 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
       clearedCount[key] = (clearedCount[key] ?? 0) + (count ?? 0);
 
       /**
-       * 任务链按「次数」推进，每一格只要消掉一次就完成。
+       * 任务链推进规则（用户反复强调的一条）：
        *
-       * 用户的要求：「每个元素不带数量，消掉一次即视为完成」。
-       * 所以这里只看「这一手有没有命中链上当前那一格的颜色」，
-       * 命中就前进一格；序列里连续同色时一手可以连过几格。
+       *   「顺手消掉的颜色不能算任务完成」——
+       *   本关要蓝色，你消蓝色时正好带掉了粉色，粉色不该算完成。
+       *
+       * 所以只认**第一波匹配**（chain === 1，也就是玩家这次交换直接产生的那些），
+       * 而且整手只推进一次。连锁掉下来的、顺带消掉的，全部不算。
+       *
+       * 同色连续格例外：链是 [蓝,蓝,粉] 时，一次三连蓝可以同时完成两格蓝 ——
+       * 那不是「顺手」，是同一种颜色连续达成。
        */
       const chain = state.level.targetChain;
-      if (!advancedThisMove && key === chain[seqIndex]) {
+      const isFirstWave = chain_i === 1;
+      if (isFirstWave && !advancedThisMove && key === chain[seqIndex]) {
         advancedThisMove = true;
         seqIndex += 1;
         // 连续同色：这一手可以继续往下填

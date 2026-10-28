@@ -713,3 +713,37 @@ test('同色连续格仍然可以一手推多格', () => {
   const { state: next } = resolveStep({ ...base, board, movesLeft: 20 }, createRng(5));
   assert.ok(next.seqIndex >= 2, `同色连续应该一次推两格，实际 ${next.seqIndex}`);
 });
+
+test('第一波同时消两色时，只有当前目标色推进（不分颜色）', () => {
+  // L6 链是 overtime, formalist, pua, ... —— 前两格不同色
+  const base = createGame(6, 42);
+  const [cur, next] = base.level.targetChain;
+  assert.notEqual(cur, next);
+
+  // 造两个互不相干的三连：一个当前目标色，一个下一个目标色
+  const board = withTiles(base.board, [
+    [2, 0, cur!],
+    [2, 1, cur!],
+    [2, 2, cur!],
+    [5, 4, next!],
+    [5, 5, next!],
+    [5, 6, next!],
+  ]);
+
+  const { state: s } = resolveStep({ ...base, board, movesLeft: 20 }, createRng(5));
+  // 不管是先遍历到哪个颜色，一次操作最多推进一格
+  assert.equal(s.seqIndex, 1, `应该只推进一格，实际 ${s.seqIndex}`);
+});
+
+test('连锁消到下一格的颜色也不算完成', () => {
+  // 这条用行为断言表达：一次操作结束时，seqIndex 最多只比开始时大 1
+  // （同色连续格由另一个测试覆盖）
+  const base = createGame(6, 42);
+  const board = withTiles(base.board, [
+    [4, 0, base.level.targetChain[0]!],
+    [4, 1, base.level.targetChain[0]!],
+    [4, 2, base.level.targetChain[0]!],
+  ]);
+  const { state: s } = resolveStep({ ...base, board, movesLeft: 20 }, createRng(9));
+  assert.ok(s.seqIndex <= 1, `连锁不该多推，实际 ${s.seqIndex}`);
+});
