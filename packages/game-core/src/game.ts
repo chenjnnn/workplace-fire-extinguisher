@@ -908,6 +908,8 @@ function bumpCounts(
  * 正确做法：看「跨过了几道 12 的门槛」，和已经答过的题数比较。
  */
 export function shouldTriggerQuiz(state: GameState): boolean {
+  // 关卡已经结束（通关 / 失败）就不该再弹题目了
+  if (state.phase !== 'idle') return false;
   if (state.pendingQuiz) return false;
   // 每局有上限，避免大关卡一直被打断
   if (state.quizzesTaken >= QUIZ_MAX_PER_GAME) return false;

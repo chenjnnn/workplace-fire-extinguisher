@@ -9,8 +9,6 @@ import {
   computeStars,
   missingTargets,
   pickPuaLine,
-  pickShowdown,
-  showdownBest,
   summarize,
   type GameState,
   type ShareData,
@@ -37,14 +35,10 @@ export function ResultOverlay({
   const avatar = useMemo(() => loadSave().avatar, []);
   const persona = avatarPersona(avatar);
   const [showShare, setShowShare] = useState(false);
-  /** 通关后的「话术对决」：选了一个选项就不再换 */
-  const [retort, setRetort] = useState<number | null>(null);
-
   // 本关最主要的领导类型（用来选话术）
   const mainBoss: VillainType = state.level.types[0] ?? 'pua';
   // 失败：抽一句 PUA；通关：抽一场对决
   const pua = useMemo(() => pickPuaLine(mainBoss, state.totalCleared * 7 + 13), [mainBoss, state.totalCleared]);
-  const showdown = useMemo(() => pickShowdown(mainBoss), [mainBoss]);
 
   const nextLevel = levelId + 1;
   const hasNext = won && nextLevel <= TOTAL_LEVELS;
@@ -52,7 +46,11 @@ export function ResultOverlay({
   return (
     <div className={`animate-in-up relative flex h-[100dvh] flex-col ${won ? 'bg-[#fff3e2]' : 'bg-[#fff8ec]'}`}>
       {/* 通关庆祝：巴掌追着头像扇（纯装饰，不参与玩法） */}
-      {won && <VictoryStage types={state.level.types} />}
+      {won && (
+        <div className="pointer-events-none absolute inset-0 z-30">
+          <VictoryStage types={state.level.types} />
+        </div>
+      )}
 
       <div className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 pt-4">
       <h1
@@ -98,60 +96,11 @@ export function ResultOverlay({
         </section>
       )}
 
-      {/* 通关：话术对决 */}
-      {won && (
-        <section className="mt-4 rounded-xl bg-white/78 p-4">
-          <div className="flex items-center gap-2">
-            {/* 用玩家自己捏的形象当「对手」，这一战才有代入感 */}
-            <AvatarFigure avatar={avatar} size={40} className="shrink-0" />
-            <p className="text-[11px] font-medium text-[#b45309]">
-              {VILLAINS[showdown.boss].name} 说：
-            </p>
-          </div>
-          <p className="mt-1 text-[15px] font-bold leading-relaxed text-[#3f3a35]">
-            「{showdown.taunt}」
-          </p>
-
-          <p className="mt-3 text-[11px] font-medium text-[#a89e93]">你怎么回？</p>
-          <div className="mt-1.5 space-y-1.5">
-            {showdown.options.map((option, idx) => {
-              const chosen = retort === idx;
-              const picked = retort !== null;
-              const isBest = option.bonus === showdownBest(showdown);
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  disabled={picked}
-                  onClick={() => setRetort(idx)}
-                  className={`w-full rounded-xl border-2 px-3 py-2 text-left text-[13px] leading-snug transition ${
-                    chosen
-                      ? 'border-[#f59e0b] bg-[#fff3d6] font-semibold text-[#3f3a35]'
-                      : picked
-                        ? 'border-[#efe4d6] text-[#c9bda9]'
-                        : 'border-[#efe4d6] bg-white text-[#5a5148] hover:border-[#fbbf24]'
-                  }`}
-                >
-                  {option.text}
-                  {picked && isBest && (
-                    <span className="ml-1 rounded bg-[#10b981] px-1 text-[9px] font-bold text-[#3f3a35]">
-                      最佳
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {retort !== null && showdown.options[retort] && (
-            <div className="mt-2.5 rounded-xl bg-[#f7ede0] p-3">
-              <p className="text-[11px] leading-relaxed text-[#5a5148]">
-                {showdown.options[retort]!.reaction}
-              </p>
-            </div>
-          )}
-        </section>
-      )}
+      {/*
+        用户要求：「把游戏结束页面背后的巴掌追人动画放到最上面一层，
+        取代掉现在的选择题」。
+        所以原来的「话术对决」三选一已经删掉，庆祝动画改成主角（见文件顶部）。
+      */}
 
       {/* 星星 */}
       <div className="mt-4 flex items-center justify-center gap-3">

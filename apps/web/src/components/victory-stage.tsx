@@ -24,12 +24,18 @@ interface Props {
 }
 
 /** 逃跑路线：每个头像一组关键帧坐标（百分比） */
+/**
+ * 逃跑路线。
+ *
+ * 全部限制在页面上半部分（y 4%~30%）：结算页的分数、统计、按钮都在下面，
+ * 头像乱窜到那里会把文字盖住。上半部是标题和星星，盖住也没关系。
+ */
 const PATHS = [
-  { x: '12%', y: '18%', dx: '58%', dy: '22%', dur: '3.1s', delay: '0s' },
-  { x: '68%', y: '12%', dx: '-46%', dy: '34%', dur: '3.8s', delay: '0.4s' },
-  { x: '26%', y: '62%', dx: '44%', dy: '-28%', dur: '3.4s', delay: '0.9s' },
-  { x: '72%', y: '58%', dx: '-38%', dy: '-30%', dur: '4.1s', delay: '0.2s' },
-  { x: '44%', y: '34%', dx: '30%', dy: '36%', dur: '3.6s', delay: '1.2s' },
+  { x: '8%', y: '6%', dx: '52%', dy: '14%', dur: '3.1s', delay: '0s' },
+  { x: '70%', y: '4%', dx: '-42%', dy: '18%', dur: '3.8s', delay: '0.4s' },
+  { x: '20%', y: '24%', dx: '46%', dy: '-14%', dur: '3.4s', delay: '0.9s' },
+  { x: '74%', y: '22%', dx: '-36%', dy: '-14%', dur: '4.1s', delay: '0.2s' },
+  { x: '42%', y: '14%', dx: '26%', dy: '16%', dur: '3.6s', delay: '1.2s' },
 ];
 
 export function VictoryStage({ types }: Props) {
@@ -98,7 +104,7 @@ export function VictoryStage({ types }: Props) {
         /* ---------- 巴掌：在舞台中央偏右的位置循环挥 ---------- */
         .chaser {
           left: 50%;
-          top: 52%;
+          top: 17%;
           animation: chaseMove 3.2s ease-in-out infinite;
         }
         @keyframes chaseMove {

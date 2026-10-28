@@ -797,6 +797,8 @@ export class GameEngine {
    * 时机：每消除 12 个弹一次。此时棋盘刚结算完，玩家手里没有未完成的动作。
    */
   private maybeQuiz(): void {
+    // 双保险：引擎这层也挡一次，避免结算后还弹题
+    if (this.state.phase !== 'idle') return;
     if (!shouldTriggerQuiz(this.state)) return;
     const seed = (Date.now() ^ (this.state.totalCleared * 7919)) >>> 0;
     const { state: next, usedIds } = triggerQuiz(this.state, this.quizUsedIds, seed);
