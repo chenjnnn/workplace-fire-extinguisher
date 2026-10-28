@@ -435,23 +435,40 @@ export function drawTileSprite(
    */
   if (hpMax > 1 && hp < hpMax) {
     const ratio = Math.max(0, Math.min(1, hp / hpMax)); // 剩 1/2 血 → 0.5
-    const ringR = r * 1.02;
+    /*
+     * 环画在**圆内侧**（0.86r），不是外侧。
+     *
+     * 之前画在 1.02r 上，加上 8.5% 的线宽正好超出 canvas 边界 ——
+     * 环被裁掉一半，所以「看不太清」。
+     *
+     * 颜色也不能用金色：抢功精的底色就是金色，等于没有对比。
+     * 现在用「深色底环 + 纯白血量环 + 深色外描边」，
+     * 在任何底色上都跳得出来。
+     */
+    const ringR = r * 0.86;
+    const ringW = size * 0.14;
 
-    // 底环（表示「满血」的总长度）
+    // 1) 深色底环：标出「满血」的总长度，让缺口一眼可见
     ctx.save();
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.28)';
-    ctx.lineWidth = size * 0.085;
+    ctx.strokeStyle = 'rgba(18, 18, 22, 0.82)';
+    ctx.lineWidth = ringW;
     ctx.beginPath();
     ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
     ctx.stroke();
 
-    // 当前血量（从 12 点方向顺时针）
-    ctx.strokeStyle = '#fbbf24';
-    ctx.lineWidth = size * 0.085;
+    // 2) 血量环：纯白，从 12 点方向顺时针
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = ringW * 0.72;
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.arc(cx, cy, ringR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ratio);
     ctx.stroke();
+
+    // 3) 环尾加一个小亮点，强调「还差这么多」
+    const endAngle = -Math.PI / 2 + Math.PI * 2 * ratio;
+    ctx.fillStyle = '#ffffff';
+    circle(ctx, cx + Math.cos(endAngle) * ringR, cy + Math.sin(endAngle) * ringR, ringW * 0.5);
+    ctx.fill();
     ctx.restore();
   }
 

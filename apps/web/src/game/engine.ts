@@ -293,6 +293,16 @@ export class GameEngine {
         snapshot: () => this.debugSnapshot(),
         setUiPaused: (v: boolean) => this.setUiPaused(v),
         /** 仅供 e2e：直接把本关判为通关（用来验证胜利页） */
+        /** 仅供调试：把棋盘上所有 2 血角色打成半血，用来检查血量环 */
+        debugHalfHp: () => {
+          this.state = {
+            ...this.state,
+            board: this.state.board.map((row) =>
+              row.map((t) => (t && VILLAINS[t.type].hp > 1 ? { ...t, hp: 1 } : t)),
+            ),
+          };
+          this.emitHud();
+        },
         debugWin: () => {
           this.state = {
             ...this.state,
