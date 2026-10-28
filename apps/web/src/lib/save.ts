@@ -38,6 +38,10 @@ export interface SaveData {
    * 所以不能用每局重置的内存数组，必须落盘。
    */
   quizSeen: string[];
+  /** 每日挑战：今天的成绩（跨天重置） */
+  daily: { date: string; bestScore: number; played: boolean } | null;
+  /** 加班无尽：最高到过第几关、最高分 */
+  endless: { bestStage: number; bestScore: number } | null;
 }
 
 export function defaultSave(): SaveData {
@@ -54,6 +58,8 @@ export function defaultSave(): SaveData {
     soundOn: true,
     disclaimerAck: false,
     quizSeen: [],
+    daily: null,
+    endless: null,
   };
 }
 
@@ -75,6 +81,21 @@ export function loadSave(): SaveData {
       soundOn: typeof parsed.soundOn === 'boolean' ? parsed.soundOn : true,
       disclaimerAck: Boolean(parsed.disclaimerAck),
       quizSeen: Array.isArray(parsed.quizSeen) ? parsed.quizSeen.filter((x) => typeof x === 'string') : [],
+      daily:
+        parsed.daily && typeof parsed.daily === 'object'
+          ? {
+              date: String(parsed.daily.date ?? ''),
+              bestScore: Number(parsed.daily.bestScore ?? 0),
+              played: Boolean(parsed.daily.played),
+            }
+          : null,
+      endless:
+        parsed.endless && typeof parsed.endless === 'object'
+          ? {
+              bestStage: Number(parsed.endless.bestStage ?? 0),
+              bestScore: Number(parsed.endless.bestScore ?? 0),
+            }
+          : null,
     };
   } catch {
     return defaultSave();

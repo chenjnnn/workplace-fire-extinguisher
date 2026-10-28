@@ -334,6 +334,23 @@ export interface LevelConfig {
    *               （第 11 关起，防止玩家靠一直消别的颜色刷收网、跳过全部任务）
    */
   sweepMode?: 'score' | 'limited';
+  /** 词缀带来的血量加成（比如「抢功加倍」让抢功精 3 条命） */
+  hpBoost?: Partial<Record<VillainType, number>>;
+  /** 加班魔反咬的倍率（默认 1） */
+  overtimeBiteScale?: number;
+  /** 形式怪十字爆裂的额外半径（默认 0） */
+  formalistBlastBonus?: number;
+  /** 开局随机多少格变成同一种颜色（词缀用） */
+  openingCluster?: number;
+  /** 每走多少步强制洗牌一次（词缀用） */
+  forcedReshuffleEvery?: number;
+  /** 每完成一格任务额外扣几步（词缀用） */
+  taskStepPenalty?: number;
+  /**
+   * 所属幕：1 = 入职到离职，2 = 跳槽，3 = 升职/创业。
+   * 主菜单和关卡地图用它分组显示。
+   */
+  chapter?: 1 | 2 | 3;
   /**
    * 这一关允许跳过几次（不填 = 2）。
    * 设为 0 时整关不显示跳过按钮 —— 前 3 关用这个，避免一开始就有太多按钮。

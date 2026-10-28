@@ -14,10 +14,12 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_AVATAR,
+  TOTAL_LEVELS,
   VILLAINS,
   VILLAIN_ORDER,
   avatarPersona,
   getLevel,
+  todayKey,
   type VillainType,
 } from '@vc/core';
 import { AvatarFigure, VillainTile } from '@/components/art';
@@ -59,7 +61,18 @@ export default function HomePage() {
     return <main className="min-h-screen bg-[#fff8ec]" />;
   }
 
-  const currentLevelId = Math.min(save.progress.unlocked, 10);
+  const currentLevelId = Math.min(save.progress.unlocked, TOTAL_LEVELS);
+  // 每日挑战：第 10 关后解锁；每天的成绩只在当天有效
+  const dailyUnlocked = save.progress.unlocked > 10;
+  const today = todayKey();
+  const dailyRecord = save.daily && save.daily.date === today ? save.daily : null;
+  const daily = {
+    done: Boolean(dailyRecord?.played),
+    best: dailyRecord?.bestScore ?? 0,
+  };
+  // 加班无尽：通关主线后解锁
+  const endlessUnlocked = save.progress.unlocked >= TOTAL_LEVELS;
+  const endless = save.endless ?? { bestStage: 0, bestScore: 0 };
   const level = getLevel(currentLevelId);
   const persona = avatarPersona(save.avatar);
   // 和默认形象不一致就算「捏过了」
@@ -106,18 +119,105 @@ export default function HomePage() {
           </Link>
         </section>
 
-        {/* 主按钮 */}
-        <section className="mt-12">
+        {/*
+          三个模式入口（B 部分）。
+          未解锁的卡片显示锁定条件和当前进度，不让点进去。
+        */}
+        <section className="mt-10 space-y-3">
+          {/* 主线任务 */}
           <Link
             href={`/play/?level=${currentLevelId}`}
-            className="block w-full rounded-full bg-[#e8623c] py-4 text-center text-lg font-black tracking-wide text-white  transition active:scale-[0.98]"
+            className="block rounded-2xl bg-[#e8623c] px-5 py-4 text-white transition active:scale-[0.99]"
           >
-            开始游戏
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-display text-[19px] leading-tight">主线任务</p>
+                <p className="mt-1 text-[11px] opacity-90">
+                  第 {currentLevelId} 关 · {level.name}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="font-num text-[22px] font-black leading-none">
+                  {save.progress.unlocked}
+                  <span className="text-[13px] font-bold opacity-80">/{TOTAL_LEVELS}</span>
+                </p>
+                <p className="mt-1 text-[10px] opacity-80">进度</p>
+              </div>
+            </div>
+            <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-white/25">
+              <div
+                className="h-full rounded-full bg-white"
+                style={{ width: `${(save.progress.unlocked / TOTAL_LEVELS) * 100}%` }}
+              />
+            </div>
           </Link>
-          {save.progress.unlocked > 1 && (
-            <p className="mt-2 text-center text-[11px] text-[#b8a892]">
-              当前进度：第 {currentLevelId} 关 · {level.name}
-            </p>
+
+          {/* 每日挑战：第 10 关后解锁 */}
+          {dailyUnlocked ? (
+            <Link
+              href="/daily/"
+              className="block rounded-2xl bg-white px-5 py-4 text-[#3f3a35] transition active:scale-[0.99]"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-display text-[17px] leading-tight">每日挑战</p>
+                  <p className="mt-1 text-[11px] text-[#a89e93]">
+                    {daily.done ? `今天已打卡 · 最高 ${daily.best.toLocaleString()} 分` : '全网同题，一天一局'}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold ${
+                    daily.done ? 'bg-[#dcfce7] text-[#16a34a]' : 'bg-[#fff1e6] text-[#e8623c]'
+                  }`}
+                >
+                  {daily.done ? '已打卡' : '去挑战'}
+                </span>
+              </div>
+            </Link>
+          ) : (
+            <div className="rounded-2xl bg-white/60 px-5 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-display text-[17px] leading-tight text-[#c9bda9]">🔒 每日挑战</p>
+                  <p className="mt-1 text-[11px] text-[#c9bda9]">
+                    通关第 10 关解锁（{Math.min(save.progress.unlocked, 10)}/10）
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 加班无尽：通关主线后解锁 */}
+          {endlessUnlocked ? (
+            <Link
+              href="/endless/"
+              className="block rounded-2xl bg-white px-5 py-4 text-[#3f3a35] transition active:scale-[0.99]"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-display text-[17px] leading-tight">加班无尽</p>
+                  <p className="mt-1 text-[11px] text-[#a89e93]">
+                    {endless.bestStage > 0
+                      ? `最远第 ${endless.bestStage} 关 · ${endless.bestScore.toLocaleString()} 分`
+                      : '能扛到第几关？'}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-[#ede9fe] px-3 py-1.5 text-[11px] font-bold text-[#7c3aed]">
+                  去加班
+                </span>
+              </div>
+            </Link>
+          ) : (
+            <div className="rounded-2xl bg-white/60 px-5 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-display text-[17px] leading-tight text-[#c9bda9]">🔒 加班无尽</p>
+                  <p className="mt-1 text-[11px] text-[#c9bda9]">
+                    通关第 {TOTAL_LEVELS} 关解锁（{save.progress.unlocked}/{TOTAL_LEVELS}）
+                  </p>
+                </div>
+              </div>
+            </div>
           )}
         </section>
 

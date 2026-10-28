@@ -24,11 +24,34 @@ export default function PlayPage() {
 
 function PlayWithParams() {
   const params = useSearchParams();
-  const raw = Number(params.get('level') ?? '1');
-  const levelId = Number.isFinite(raw) ? Math.min(Math.max(1, Math.floor(raw)), TOTAL_LEVELS) : 1;
   const modeParam = params.get('mode');
   const mode: GameMode = modeParam === 'catharsis' ? 'catharsis' : 'normal';
-  return <PlayClient levelId={levelId} mode={mode} />;
+
+  /**
+   * 三种关卡来源：
+   *   /play/?level=5      → 主线第 5 关
+   *   /play/?daily=1      → 今日每日挑战（种子 = 今天日期）
+   *   /play/?endless=7    → 无尽模式第 7 关（逐关递增）
+   */
+  if (params.get('daily')) {
+    return <PlayClient levelId={0} mode={mode} runKind="daily" />;
+  }
+
+  const endlessStage = Number(params.get('endless') ?? '0');
+  if (Number.isFinite(endlessStage) && endlessStage > 0) {
+    return (
+      <PlayClient
+        levelId={0}
+        mode={mode}
+        runKind="endless"
+        stage={Math.floor(endlessStage)}
+      />
+    );
+  }
+
+  const raw = Number(params.get('level') ?? '1');
+  const levelId = Number.isFinite(raw) ? Math.min(Math.max(1, Math.floor(raw)), TOTAL_LEVELS) : 1;
+  return <PlayClient levelId={levelId} mode={mode} runKind="main" />;
 }
 
 function PlayFallback() {

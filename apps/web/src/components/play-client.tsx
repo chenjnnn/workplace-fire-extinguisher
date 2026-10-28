@@ -15,7 +15,10 @@ import {
   MODE_CONFIGS,
   buildShareData,
   computeStars,
+  createDailyLevel,
+  createEndlessLevel,
   getLevel,
+  todayKey,
   type AvatarConfig,
   type GameMode,
   type GameState,
@@ -57,7 +60,19 @@ function MiniStat({
   );
 }
 
-export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode?: GameMode }) {
+export function PlayClient({
+  levelId,
+  mode = 'normal',
+  runKind = 'main',
+  stage = 0,
+}: {
+  levelId: number;
+  mode?: GameMode;
+  /** 关卡来源：主线 / 每日挑战 / 无尽模式 */
+  runKind?: 'main' | 'daily' | 'endless';
+  /** 无尽模式的第几关 */
+  stage?: number;
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<GameEngine | null>(null);
 
@@ -112,7 +127,26 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
   const [streakStamp, setStreakStamp] = useState<{ n: number; key: number } | null>(null);
   const lastStreakRef = useRef(0);
 
-  const level = getLevel(levelId);
+  /**
+   * 关卡来源。
+   *
+   * 主线读 LEVELS；每日挑战用日期种子现算；无尽模式按 stage 递增生成。
+   *
+   * 注意：每日/无尽的配置依赖 **当前时间**，如果在 render 里直接算，
+   * 服务端和客户端会得到不同的结果 → React 报 hydration mismatch 并整棵树重建。
+   * 所以先渲染主线的占位关卡，等挂载后再换成真正的动态关卡。
+   */
+  const [level, setLevel] = useState(() => getLevel(levelId || 1));
+
+  useEffect(() => {
+    if (runKind === 'daily') {
+      setLevel(createDailyLevel());
+    } else if (runKind === 'endless') {
+      setLevel(createEndlessLevel(Math.max(1, stage)));
+    } else {
+      setLevel(getLevel(levelId));
+    }
+  }, [runKind, stage, levelId]);
   /**
    * 场景随机种子。
    *
@@ -146,18 +180,52 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
     const engine = new GameEngine({
       canvas,
       levelId,
+      level,
       mode,
       avatar: save.avatar,
       onHud: (snapshot) => setHud(snapshot),
       onFinish: (state) => {
-        const nextSave = applyLevelResult(
-          loadSave(),
-          levelId,
-          computeStars(state),
-          state.score,
-          state.totalCleared,
-          state.maxChain,
-        );
+        const save0 = loadSave();
+
+        /**
+         * 三种模式的存档写法不同：
+         *   main    → 照旧走主线进度
+         *   daily   → 记录当天最高分 + 打卡（跨天自动失效）
+         *   endless → 只记「最远第几关 + 最高分」，不推进主线
+         */
+        let nextSave = save0;
+
+        if (runKind === 'daily') {
+          const today = todayKey();
+          const prev = save0.daily && save0.daily.date === today ? save0.daily : null;
+          nextSave = {
+            ...save0,
+            daily: {
+              date: today,
+              bestScore: Math.max(prev?.bestScore ?? 0, state.score),
+              played: true,
+            },
+          };
+        } else if (runKind === 'endless') {
+          const prev = save0.endless ?? { bestStage: 0, bestScore: 0 };
+          nextSave = {
+            ...save0,
+            endless: {
+              bestStage: Math.max(prev.bestStage, state.phase === 'won' ? stage : stage - 1),
+              bestScore: Math.max(prev.bestScore, state.score),
+            },
+          };
+        } else {
+          nextSave = applyLevelResult(
+            save0,
+            levelId,
+            computeStars(state),
+            state.score,
+            state.totalCleared,
+            state.maxChain,
+          );
+        }
+
         persistSave(nextSave);
         setFinished(state);
         setShare(buildShareData(state, nextSave.avatar));
@@ -179,7 +247,7 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
       engine.destroy();
       engineRef.current = null;
     };
-  }, [levelId, mode, briefed]);
+  }, [levelId, mode, briefed, level]);
 
   const restart = useCallback(() => {
     setFinished(null);
@@ -295,6 +363,8 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
             state={finished}
             share={share}
             levelId={levelId}
+            runKind={runKind}
+            stage={stage}
             onRestart={restart}
           />
         </div>

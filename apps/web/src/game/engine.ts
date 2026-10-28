@@ -14,6 +14,7 @@ import {
   comboLabel,
   computeStars,
   createGame,
+  createGameWithLevel,
   createRng,
   findHint,
   getCell,
@@ -127,6 +128,11 @@ export interface HudSnapshot {
 export interface EngineOptions {
   canvas: HTMLCanvasElement;
   levelId: number;
+  /**
+   * 直接指定关卡配置（每日挑战 / 无尽模式用）。
+   * 传了它就不看 levelId。
+   */
+  level?: import('@vc/core').LevelConfig;
   seed?: number;
   mode?: GameMode;
   avatar: AvatarConfig | null;
@@ -278,7 +284,9 @@ export class GameEngine {
     if (!ctx) throw new Error('浏览器不支持 canvas 2d');
     this.ctx = ctx;
 
-    this.state = createGame(options.levelId, options.seed, options.mode ?? 'normal');
+    this.state = options.level
+      ? createGameWithLevel(options.level, options.seed, options.mode ?? 'normal')
+      : createGame(options.levelId, options.seed, options.mode ?? 'normal');
     this.rng = createRng(this.state.seed);
 
     this.attachResize();
@@ -391,8 +399,8 @@ export class GameEngine {
   }
 
   restart(seed?: number): void {
-    const levelId = this.state.level.id;
-    this.state = createGame(levelId, seed, this.state.mode);
+    // 重开当前关卡：保留同一份配置（每日/无尽的动态关卡也能正确重开）
+    this.state = createGameWithLevel(this.state.level, seed, this.state.mode);
     this.rng = createRng(this.state.seed);
     this.tweens.clear();
     this.particles = [];

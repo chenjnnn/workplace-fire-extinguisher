@@ -22,11 +22,15 @@ export function ResultOverlay({
   state,
   share,
   levelId,
+  runKind = 'main',
+  stage = 0,
   onRestart,
 }: {
   state: GameState;
   share: ShareData | null;
   levelId: number;
+  runKind?: 'main' | 'daily' | 'endless';
+  stage?: number;
   onRestart: () => void;
 }) {
   const won = state.phase === 'won';
@@ -41,7 +45,26 @@ export function ResultOverlay({
   const pua = useMemo(() => pickPuaLine(mainBoss, state.totalCleared * 7 + 13), [mainBoss, state.totalCleared]);
 
   const nextLevel = levelId + 1;
-  const hasNext = won && nextLevel <= TOTAL_LEVELS;
+  /**
+   * 「下一关」在三种模式下含义不同：
+   *   主线   → 第 N+1 关（到顶就没了）
+   *   每日   → 没有下一关，回每日页
+   *   无尽   → 第 stage+1 关，永远有
+   */
+  const hasNext =
+    won && (runKind === 'main' ? nextLevel <= TOTAL_LEVELS : true);
+  const nextHref =
+    runKind === 'daily'
+      ? '/daily/'
+      : runKind === 'endless'
+        ? `/play/?endless=${stage + 1}`
+        : `/play/?level=${nextLevel}`;
+  const nextLabel =
+    runKind === 'daily'
+      ? '回每日挑战'
+      : runKind === 'endless'
+        ? `继续加班 · 第 ${stage + 1} 关`
+        : `下一关 · 第 ${nextLevel} 关`;
 
   return (
     <div className={`animate-in-up relative flex h-[100dvh] flex-col ${won ? 'bg-[#fff3e2]' : 'bg-[#fff8ec]'}`}>
@@ -259,10 +282,10 @@ export function ResultOverlay({
           {/* 主按钮：通关是「下一关」，失败是「再来一次」 */}
           {hasNext ? (
             <Link
-              href={`/play/?level=${nextLevel}`}
+              href={nextHref}
               className="block w-full rounded-full bg-[#ff6b4a] py-3.5 text-center text-[15px] font-display text-white active:scale-[0.98]"
             >
-              下一关 · 第 {nextLevel} 关
+              {nextLabel}
             </Link>
           ) : (
             <button

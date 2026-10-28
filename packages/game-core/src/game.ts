@@ -69,13 +69,15 @@ function makeTile(
   col: number,
   poisoned = false,
   variant = 0,
+  /** 词缀带来的额外血量（比如「抢功加倍」） */
+  hpBoost = 0,
 ): Tile {
   const def = VILLAINS[type];
   return {
     id: nextTileId++,
     type,
     variant: variant % 3,
-    hp: def.hp,
+    hp: def.hp + hpBoost,
     poisoned,
     state: 'idle',
     viewRow: row,
@@ -188,7 +190,14 @@ function generateBoard(level: LevelConfig, rng: Rng): Board {
       // 兜底：直接用第一个类型（极端情况才会走到）
       if (!chosen) chosen = types[0] ?? 'pua';
       // 每张牌随机一个视觉变体（只影响长相，不影响匹配）
-      board[r]![c] = makeTile(chosen, r, c, false, rng.int(3));
+      board[r]![c] = makeTile(
+        chosen,
+        r,
+        c,
+        false,
+        rng.int(3),
+        level.hpBoost?.[chosen] ?? 0,
+      );
     }
   }
 
@@ -197,7 +206,19 @@ function generateBoard(level: LevelConfig, rng: Rng): Board {
 
 /** 生成初始状态 */
 export function createGame(levelId: number, seed?: number, mode: GameMode = 'normal'): GameState {
-  const level = getLevel(levelId);
+  return createGameWithLevel(getLevel(levelId), seed, mode);
+}
+
+/**
+ * 用**任意关卡配置**开局。
+ *
+ * 每日挑战和无尽模式是运行时生成的关卡（不在 LEVELS 里），走这个入口。
+ */
+export function createGameWithLevel(
+  level: LevelConfig,
+  seed?: number,
+  mode: GameMode = 'normal',
+): GameState {
   const actualSeed = seed ?? seedFromTimestamp(Date.now());
   resetTileIds(Math.floor(actualSeed % 100000) * 1000 + 1);
   const rng = createRng(actualSeed);
@@ -225,7 +246,7 @@ export function createGame(levelId: number, seed?: number, mode: GameMode = 'nor
     danger: 0,
     dangerSeconds: r.dangerSeconds,
     status: 'active' as const,
-    avatar: makeRescueAvatar(levelId * 10 + idx),
+    avatar: makeRescueAvatar(level.id * 10 + idx),
   }));
 
   const state: GameState = {
