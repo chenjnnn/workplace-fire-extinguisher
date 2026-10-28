@@ -30,11 +30,37 @@ interface PlanGroup {
   locked?: boolean;
 }
 
+/**
+ * 按「幕」分组，覆盖全部 30 关。
+ *
+ * 之前这里硬编码了 1-5 和 6-10，后面两幕是锁定的占位，
+ * 所以关卡选择永远只到第 10 关 —— 现在跟着 TOTAL_LEVELS 走。
+ */
 const GROUPS: PlanGroup[] = [
-  { id: 'today', title: '今日计划', range: '关卡 1-5', levels: [1, 2, 3, 4, 5], face: 'pua', color: '#ff6b4a' },
-  { id: 'week', title: '周计划', range: '关卡 6-10', levels: [6, 7, 8, 9, 10], face: 'overtime', color: '#f59e0b' },
-  { id: 'month', title: '月计划', range: '即将开启', levels: [], face: null, color: '#a89e93', locked: true },
-  { id: 'quarter', title: '季度计划', range: '即将开启', levels: [], face: null, color: '#a89e93', locked: true },
+  {
+    id: 'act1',
+    title: '第一幕 · 入职到离职',
+    range: '第 1-10 关',
+    levels: Array.from({ length: 10 }, (_, i) => i + 1),
+    face: 'pua',
+    color: '#ff6b4a',
+  },
+  {
+    id: 'act2',
+    title: '第二幕 · 跳槽新公司',
+    range: '第 11-20 关',
+    levels: Array.from({ length: 10 }, (_, i) => i + 11),
+    face: 'overtime',
+    color: '#f59e0b',
+  },
+  {
+    id: 'act3',
+    title: '第三幕 · 升职与创业',
+    range: '第 21-30 关',
+    levels: Array.from({ length: 10 }, (_, i) => i + 21),
+    face: 'grafter',
+    color: '#7c3aed',
+  },
 ];
 
 export default function LevelsPage() {

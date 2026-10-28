@@ -187,6 +187,20 @@ export default function HomePage() {
             </div>
           )}
 
+          {/* 关卡选择：放到显眼位置（之前只能在页面最底部找到一个小链接） */}
+          <Link
+            href="/levels/"
+            className="flex items-center justify-between rounded-2xl border-2 border-[#e8623c]/35 bg-white px-5 py-3.5 transition active:scale-[0.99]"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-[17px]">🗂️</span>
+              <span className="font-display text-[15px] text-[#3f3a35]">关卡选择</span>
+            </div>
+            <span className="text-[11px] font-bold text-[#e8623c]">
+              第 1-{TOTAL_LEVELS} 关 ›
+            </span>
+          </Link>
+
           {/* 加班无尽：通关主线后解锁 */}
           {endlessUnlocked ? (
             <Link
@@ -257,14 +271,6 @@ export default function HomePage() {
               试试
             </span>
           </Link>
-        </section>
-
-        {/* 次入口 */}
-        <section className="mt-4 flex justify-center gap-4 text-[12px] text-[#b8a892]">
-          <Link href="/levels/" className="hover:text-[#e8623c]">
-            关卡选择
-          </Link>
-
         </section>
 
         {/* 今日领导语录：填充中部空白，每天换一句 */}
