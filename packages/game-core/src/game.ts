@@ -1242,10 +1242,15 @@ export function triggerSweep(
   if (!canSweepNow(state)) return { state, ok: false, cleared: 0 };
 
   // 跳过当前这一格：视为已完成
-  const skipped = state.level.targetChain[state.seqIndex] ?? null;
-  let seqIndex = state.seqIndex + 1;
+  /**
+   * 跳过只前进一格。
+   *
+   * 之前这里有个 while，遇到「链上连续同色」会一次跳两格 ——
+   * 用户实测「点跳过一下子跳了两个任务」就是这个。
+   * 现在链本身保证相邻不同色（见 levels.ts），跳过也只走一步。
+   */
   const chain = state.level.targetChain;
-  while (seqIndex < chain.length && chain[seqIndex] === skipped) seqIndex += 1;
+  const seqIndex = state.seqIndex + 1;
 
   const next: GameState = {
     ...state,

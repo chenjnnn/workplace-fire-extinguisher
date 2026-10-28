@@ -698,24 +698,35 @@ test('一次操作只推进一格：顺手消掉下一个颜色不算完成', ()
   );
 });
 
-test('同色连续格也只推一格（没有例外）', () => {
-  // L1 链是 pua, pua, shirk —— 前两格同色
+test('所有关卡的链都保证相邻颜色不同', () => {
+  // 相邻同色会让玩家「完成后看起来没变」，进而误以为卡住 —— 这是 v1.0.14 的真实反馈
+  for (let id = 1; id <= 10; id += 1) {
+    const chain = createGame(id, 42).level.targetChain;
+    for (let i = 1; i < chain.length; i += 1) {
+      assert.notEqual(chain[i], chain[i - 1], `第 ${id} 关链上 ${i - 1} 和 ${i} 同色`);
+    }
+  }
+});
+
+test('一次操作只推一格（消一排目标色）', () => {
   const base = createGame(1, 42);
   const c0 = base.level.targetChain[0]!;
-  assert.equal(base.level.targetChain[1], c0, 'L1 前两格应该是同色');
 
-  // 消一排 3 个当前色 → 只该完成第一格；第二格需要再消一次
   const board = withTiles(base.board, [
     [3, 0, c0],
     [3, 1, c0],
     [3, 2, c0],
   ]);
   const { state: next } = resolveStep({ ...base, board, movesLeft: 20 }, createRng(5));
-  assert.equal(
-    next.seqIndex,
-    1,
-    `一次操作只该推进一格，实际 ${next.seqIndex}（链：${base.level.targetChain.join(',')}）`,
-  );
+  assert.equal(next.seqIndex, 1, `一次操作只该推进一格，实际 ${next.seqIndex}`);
+});
+
+test('跳过只前进一格（不会连跳）', () => {
+  const base = createGame(4, 42);
+  const rich = { ...base, sweepScore: DEFAULT_SWEEP_THRESHOLDS[0] + 10, sweepUsed: 0 };
+  const res = triggerSweep(rich, 'grafter', createRng(1));
+  assert.equal(res.ok, true);
+  assert.equal(res.state.seqIndex, rich.seqIndex + 1, '跳过只能走一格');
 });
 
 test('第一波同时消两色时，只有当前目标色推进（不分颜色）', () => {
