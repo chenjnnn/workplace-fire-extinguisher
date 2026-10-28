@@ -61,7 +61,7 @@ export const VILLAINS: Record<VillainType, VillainDef> = {
     rage: 2,
     baseScore: 45,
     hp: 1,
-    mechanic: '消除后甩出一口锅，污染相邻格（要先清锅才能消）',
+    mechanic: '基础型：出事第一句话就是「这个事我不是交代过你吗」',
   },
   grafter: {
     type: 'grafter',

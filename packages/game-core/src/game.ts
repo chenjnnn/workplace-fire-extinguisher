@@ -454,13 +454,6 @@ function clearMatches(
       const cell = getCell(next, coord.row, coord.col);
       if (!cell) continue;
 
-      // 毒雾格：不消除，只解毒（需要再消一次）
-      if (cell.poisoned) {
-        next[coord.row]![coord.col] = { ...cell, poisoned: false };
-        cleared.push(coord);
-        continue;
-      }
-
       // 贪官有两条命：第一次只掉血
       if (cell.hp > 1) {
         next[coord.row]![coord.col] = {
@@ -499,29 +492,19 @@ function clearMatches(
         for (const b of blast) {
           if (!inBounds(next, b.row, b.col)) continue;
           const target = getCell(next, b.row, b.col);
-          if (!target || target.poisoned) continue;
+          if (!target) continue;
           next[b.row]![b.col] = null;
           actuallyCleared.push(b);
         }
       }
 
-      // 毒贩：污染相邻格
-      if (type === 'shirk') {
-        const neighbors: Coord[] = [
-          { row: coord.row - 1, col: coord.col },
-          { row: coord.row + 1, col: coord.col },
-          { row: coord.row, col: coord.col - 1 },
-          { row: coord.row, col: coord.col + 1 },
-        ];
-        for (const n of neighbors) {
-          if (!inBounds(next, n.row, n.col)) continue;
-          const neighborCell = getCell(next, n.row, n.col);
-          if (neighborCell && !neighborCell.poisoned) {
-            next[n.row]![n.col] = { ...neighborCell, poisoned: true };
-            poisonCells.push(n);
-          }
-        }
-      }
+      /**
+       * 甩锅侠的「污染相邻格」已经删除。
+       *
+       * 原因：中毒必须被玩家看见，但任何视觉效果（暗角、绿色、虚线框）
+       * 都会让同一种颜色出现两个版本 —— 用户明确要求「同一种颜色必须一样」。
+       * 两件事无法同时成立，所以直接去掉机制，甩锅侠变成普通角色。
+       */
 
       // 标记消除（先置 state，让渲染层播动画）
       next[coord.row]![coord.col] = { ...cell, state: 'clearing' };
