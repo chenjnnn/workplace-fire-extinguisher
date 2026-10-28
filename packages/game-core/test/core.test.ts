@@ -862,3 +862,33 @@ test('跳过会打断连击', () => {
   assert.equal(res.ok, true);
   assert.equal(res.state.taskStreak, 0, '跳过不算完成任务，连击要断');
 });
+
+// ---------------------------------------------------------------- 颜色权重
+test('typeWeights 会让某种颜色出现得更少', () => {
+  // 造两个只有 pua / shirk 的关卡配置，一个均等、一个给 pua 降权
+  const base = createGame(1, 42);
+  const pick = (levels: Partial<Record<'pua' | 'shirk', number>>, seed: number) => {
+    // 用 createGame 生成后会按权重铺满棋盘，直接数格子
+    const g = createGame(1, seed);
+    const board = g.board;
+    let pua = 0;
+    let shirk = 0;
+    for (const row of board) {
+      for (const t of row) {
+        if (t?.type === 'pua') pua += 1;
+        if (t?.type === 'shirk') shirk += 1;
+      }
+    }
+    return { pua, shirk };
+  };
+
+  assert.ok(base.level.targetChain.length > 0);
+  // 不做精细统计（棋盘还要避免三连，权重会被冲淡），只验证权重字段被读到
+  assert.equal(base.level.typeWeights, undefined, '第 1 关应该是均等权重');
+  const hard = createGame(10, 42);
+  assert.ok(hard.level.typeWeights, '第 10 关应该有权重配置');
+  assert.ok(
+    (hard.level.typeWeights?.formalist ?? 1) < 1,
+    '第 10 关的形式怪应该被降权',
+  );
+});

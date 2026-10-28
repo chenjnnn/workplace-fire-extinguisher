@@ -92,6 +92,68 @@ function makeTile(
  * 为什么要排除三连：开局就自动消除会让玩家困惑「我还没动呢」，
  * 而且白送分数，破坏难度曲线。
  */
+/**
+ * 按权重抽一种颜色。
+ *
+ * 关卡可以给某种颜色更高的权重让它更常出现（比如给干扰色加权），
+ * 也可以给当前目标色降权让它更难凑 —— 这是除时间之外的第二根难度旋钮。
+ */
+function pickWeighted(
+  types: VillainType[],
+  weights: Partial<Record<VillainType, number>> | undefined,
+  rng: Rng,
+): VillainType {
+  if (!weights) return rng.pick(types);
+  let total = 0;
+  for (const t of types) total += Math.max(0, weights[t] ?? 1);
+  if (total <= 0) return rng.pick(types);
+  let r = rng.next() * total;
+  for (const t of types) {
+    r -= Math.max(0, weights[t] ?? 1);
+    if (r <= 0) return t;
+  }
+  return types[types.length - 1] ?? 'pua';
+}
+
+/** 补块时决定颜色：目标色够多就降权，不够就保底 */
+function pickRefillType(
+  board: Board,
+  level: LevelConfig,
+  rng: Rng,
+  targetType?: VillainType | null,
+): VillainType {
+  if (!targetType || !level.types.includes(targetType)) {
+    return pickWeighted(level.types, level.typeWeights, rng);
+  }
+
+  let count = 0;
+  for (const row of board) {
+    for (const tile of row) if (tile?.type === targetType) count += 1;
+  }
+
+  // 保底：棋盘上不足 3 个，60% 直接补它
+  if (count < 3 && rng.next() < 0.6) return targetType;
+
+  // 否则降权，让它更难凑
+  return pickWeighted(level.types, withTargetPenalty(level.typeWeights, targetType), rng);
+}
+
+/**
+ * 给「当前目标色」再降一档权重。
+ *
+ * 静态权重表达的是「这一关整体偏难」，而玩家真正卡住的是「现在要抓的这个颜色不来」。
+ * 所以每次补块都按当前目标色动态打折，难度才跟着链走。
+ */
+function withTargetPenalty(
+  weights: Partial<Record<VillainType, number>> | undefined,
+  target: VillainType | null | undefined,
+): Partial<Record<VillainType, number>> | undefined {
+  if (!weights || !target) return weights;
+  const base = weights[target];
+  if (base === undefined) return weights;
+  return { ...weights, [target]: Math.max(0.25, base * 0.7) };
+}
+
 function generateBoard(level: LevelConfig, rng: Rng): Board {
   const { rows, cols, types } = level;
   const board: Board = Array.from({ length: rows }, () => Array<Cell>(cols).fill(null));
@@ -101,7 +163,7 @@ function generateBoard(level: LevelConfig, rng: Rng): Board {
       // 最多尝试有限次，避免极端情况下死循环
       let chosen: VillainType | null = null;
       for (let attempt = 0; attempt < 40; attempt += 1) {
-        const candidate = rng.pick(types);
+        const candidate = pickWeighted(types, level.typeWeights, rng);
         // 检查左边两个是否同类型
         const left1 = c >= 1 ? getCell(board, r, c - 1) : null;
         const left2 = c >= 2 ? getCell(board, r, c - 2) : null;
@@ -523,7 +585,14 @@ function refillBoard(
   board: Board,
   level: LevelConfig,
   rng: Rng,
-  weightedType?: VillainType | null,
+  /**
+   * 当前任务要抓的颜色。
+   *
+   * 它有两个相反的作用，靠棋盘上还剩几个来区分：
+   *   · 少于 3 个 → 保底加权（60% 偏向它），防止玩家一个都凑不出来
+   *   · 够多       → 降权（权重打 7 折），让难度真正跟着链走
+   */
+  targetType?: VillainType | null,
 ): Board {
   const next = board.map((row) => [...row]);
   const rows = next.length;
@@ -540,11 +609,7 @@ function refillBoard(
     // 从上往下找到第一个空位之前的连续非空段会自然下落，
     // 这里只需要在顶部生成 holes 个新格子
     for (let i = 0; i < holes; i += 1) {
-      // 保底：60% 概率优先给当前目标色
-      const type =
-        weightedType && rng.next() < 0.6 && level.types.includes(weightedType)
-          ? weightedType
-          : rng.pick(level.types);
+      const type = pickRefillType(next, level, rng, targetType);
       const tile = makeTile(type, -1 - i, c, false, rng.int(3));
       tile.state = 'spawning';
       tile.dropFromRow = -1 - i;
@@ -902,7 +967,12 @@ export function applyToolToBoard(
   const cleared = cells.length;
   // applyGravity 返回 { board, ... }，不是裸数组
   const gravity = applyGravity(board);
-  const filled = refillBoard(gravity.board, state.level, rng);
+  const filled = refillBoard(
+    gravity.board,
+    state.level,
+    rng,
+    state.level.targetChain[state.seqIndex] ?? null,
+  );
   // 工具清出来的新牌直接落定，不播掉落动画
   for (const row of filled) {
     for (const tile of row) {

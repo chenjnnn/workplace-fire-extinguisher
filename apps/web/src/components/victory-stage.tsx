@@ -36,13 +36,16 @@ interface Props {
  * 现在舞台是结算页底部那块空白区，所以垂直方向可以铺开。
  */
 const PATHS = [
-  // dx/dy 用 vw，因为 CSS 里 translate 的百分比是相对元素自身尺寸的，
-  // 用它会让位移只有几十像素（头像全挤在中间）。
-  { x: '4%', y: '12%', dx: '58vw', dy: '18vh', dur: '3.1s', delay: '0s' },
-  { x: '78%', y: '8%', dx: '-46vw', dy: '26vh', dur: '3.8s', delay: '0.4s' },
-  { x: '10%', y: '62%', dx: '52vw', dy: '-20vh', dur: '3.4s', delay: '0.9s' },
-  { x: '82%', y: '56%', dx: '-42vw', dy: '-22vh', dur: '4.1s', delay: '0.2s' },
-  { x: '42%', y: '36%', dx: '30vw', dy: '22vh', dur: '3.6s', delay: '1.2s' },
+  /*
+   * 位移量要克制：舞台只有约 360×300，头像 44px。
+   * 之前用 58vw（约 226px）时，五个头像全都跑到右侧堆在一起，
+   * 看起来像「只出现了一个」。现在每个象限小幅晃动，分布均匀。
+   */
+  { x: '6%', y: '14%', dx: '18vw', dy: '28%', dur: '3.1s', delay: '0s' },
+  { x: '70%', y: '10%', dx: '-16vw', dy: '32%', dur: '3.8s', delay: '0.4s' },
+  { x: '12%', y: '60%', dx: '16vw', dy: '-24%', dur: '3.4s', delay: '0.9s' },
+  { x: '72%', y: '56%', dx: '-14vw', dy: '-26%', dur: '4.1s', delay: '0.2s' },
+  { x: '40%', y: '34%', dx: '10vw', dy: '24%', dur: '3.6s', delay: '1.2s' },
 ];
 
 export function VictoryStage({ types }: Props) {

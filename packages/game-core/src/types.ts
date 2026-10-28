@@ -316,6 +316,17 @@ export interface LevelConfig {
   minScore: number;
   starScores: [number, number, number];
   /**
+   * 每种颜色在棋盘上的出现权重（不填 = 全部 1）。
+   *
+   * 用户的要求：「难度的调整不仅仅是改时间，更是修改方格中对应颜色能够消到的难易程度」。
+   * 把当前目标色的权重调低，它就出得更少、更难凑三连；
+   * 非目标色的权重相对变高，干扰更强。
+   *
+   * 注意：引擎有保底机制（目标色不足 3 个时补块偏向它），
+   * 所以权重只影响「平均难度」，不会真的卡死。
+   */
+  typeWeights?: Partial<Record<VillainType, number>>;
+  /**
    * 收网积分的计算方式。
    *
    * 'score'    —— 只要分数涨就算攒（第 1-10 关）
