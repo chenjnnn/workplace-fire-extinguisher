@@ -902,3 +902,22 @@ test('typeWeights 会让某种颜色出现得更少', () => {
     '第 10 关的形式怪应该被降权',
   );
 });
+
+test('链已完成时倒计时归零也不判负（连锁期间的保护）', () => {
+  const base = createGame(1, 42);
+  // 构造「链走完 + 时间只剩 0.2 秒」的临界局面
+  const done = {
+    ...base,
+    seqIndex: base.level.targetChain.length,
+    taskTimeLeft: 0.2,
+  };
+  const next = tickTimer(done, 1);
+  assert.equal(next.phase, 'won', '链满了就该赢，不能因为超时判负');
+});
+
+test('链未完成时倒计时归零仍按超时规则处理', () => {
+  const g = createGame(5, 42);
+  const t1 = tickTimer({ ...g, taskTimeLeft: 0.2 }, 1);
+  assert.equal(t1.phase, 'idle', '第一次超时扣步不判负');
+  assert.equal(t1.movesLeft, g.movesLeft - 2);
+});

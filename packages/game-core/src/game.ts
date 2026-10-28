@@ -781,6 +781,18 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     // 消除结果反馈到救援进度
     rescueState = feedRescue(rescueState, outcome.counts);
 
+    /**
+     * 任务链已经走完 → 后面的连锁不再继续算。
+     *
+     * 用户反馈：「任务已经完成，但连锁消除还在放，连锁耗尽时间所以显示失败」。
+     * 原因是胜负判定写在连锁循环**之后**，中间那几波连锁既浪费时间
+     * （引擎是异步逐波播放的），也可能被倒计时抢先把 phase 改成 lost。
+     * 现在一旦链满就立刻跳出循环，最后统一判胜。
+     */
+    if (seqIndex >= state.level.targetChain.length) {
+      break;
+    }
+
     // 移除 → 重力 → 填充
     board = removeCleared(board, outcome.cleared);
 
@@ -1149,6 +1161,21 @@ function shortageType(
  */
 export function tickTimer(state: GameState, dt: number): GameState {
   if (state.phase !== 'idle') return state;
+
+  /**
+   * 兜底：任务链已经全部完成时，绝不允许因为超时而判负。
+   *
+   * 用户反馈：「任务已经完成，但连锁消除还在放，连锁耗尽时间所以显示失败」。
+   * 链完成的那一刻就应该赢了 —— 哪怕胜负判定因为动画还没跑到。
+   * 这里直接把局面定成通关，不再往下走倒计时。
+   */
+  if (goalsMet(state)) {
+    return {
+      ...state,
+      phase: 'won',
+      score: state.score + Math.min(state.movesLeft * 100, 800),
+    };
+  }
 
   // 顺手累计真实用时（引擎只在这三件事都不发生时才会调 tickTimer）
   state = { ...state, elapsedSeconds: (state.elapsedSeconds ?? 0) + dt };
