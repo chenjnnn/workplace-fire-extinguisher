@@ -132,7 +132,8 @@ function pickRefillType(
   }
 
   // 保底：棋盘上不足 3 个，60% 直接补它
-  if (count < 3 && rng.next() < 0.6) return targetType;
+  // 阈值从 3 提到 4：避免「刚好 3 个」时在保底/降权之间反复横跳
+  if (count < 4 && rng.next() < 0.6) return targetType;
 
   // 否则降权，让它更难凑
   return pickWeighted(level.types, withTargetPenalty(level.typeWeights, targetType), rng);
@@ -231,6 +232,8 @@ export function createGame(levelId: number, seed?: number, mode: GameMode = 'nor
     rescues,
     pendingQuiz: null,
     quizzesTaken: 0,
+    elapsedSeconds: 0,
+    timeoutsUsed: 0,
     taskTimeLeft: level.taskTimerSeconds ?? 0,
     levelTimeLeft: level.levelTimerSeconds ?? 0,
     seqIndex: 0,
@@ -740,23 +743,30 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     }
 
     /**
-     * ============ 收网积分 ============
+     * ============ 跳过积分 ============
      *
-     * 'score'   —— 只要分数涨就算攒（前 10 关）
-     * 'limited' —— 只认「完成任务前 3 次非目标消除」的分；
-     *              第 4 次起分数照常涨，但不进收网进度。
+     * 用户确认的规则：**只有「非目标色的消除」才攒跳过进度**。
+     *
+     * 为什么这么改：之前 `score` 里既有目标色的分也有杂色的分，
+     * 于是「消得顺 → 跳过快 → 推进快 → 更容易连击 → 又攒更多分」形成正反馈。
+     * 现在把两种分分开：
+     *   · 消目标色 = 做正事，推进任务链，但**不**攒跳过
+     *   · 消杂色   = 用步数"刷"出来的分，才能换跳过
+     * 想跳就得牺牲几步去消无关颜色 —— 这才是真正的取舍。
      */
-    if (!advancedThisMove || !target || !matchedTypes.has(target)) {
+    const hitTarget = Boolean(target && matchedTypes.has(target));
+    if (!hitTarget) {
       for (const [type, count] of Object.entries(outcome.counts)) {
         if (type !== target) offTargetCleared += count ?? 0;
       }
       if (isFirstWave) {
         offTargetStreak += 1;
-        // 消了非目标色 = 打断连击
-        taskStreak = 0;
+        taskStreak = 0; // 消了非目标色 = 打断连击
       }
     }
-    {
+
+    // 只有这一手没命中目标色时，才算进跳过进度
+    if (!hitTarget) {
       const mode = state.level.sweepMode ?? 'score';
       if (mode === 'score' || offTargetStreak <= 3) {
         sweepScore += gainedThisMove;
@@ -857,7 +867,7 @@ export function resolveStep(state: GameState, rng: Rng): StepResult {
     next = {
       ...next,
       phase: 'won',
-      score: next.score + next.movesLeft * 100,
+      score: next.score + Math.min(next.movesLeft * 100, 800),
     };
   } else if (next.movesLeft <= 0) {
     next = { ...next, phase: 'lost' };
@@ -1135,6 +1145,9 @@ function shortageType(
 export function tickTimer(state: GameState, dt: number): GameState {
   if (state.phase !== 'idle') return state;
 
+  // 顺手累计真实用时（引擎只在这三件事都不发生时才会调 tickTimer）
+  state = { ...state, elapsedSeconds: (state.elapsedSeconds ?? 0) + dt };
+
   const hasLevel = state.level.levelTimerSeconds ? state.levelTimeLeft > 0 : false;
   const hasTask = state.level.taskTimerSeconds ? state.taskTimeLeft > 0 : false;
   if (!hasLevel && !hasTask) return state;
@@ -1149,7 +1162,27 @@ export function tickTimer(state: GameState, dt: number): GameState {
 
   if (hasTask && !hasLevel) {
     const left = state.taskTimeLeft - dt;
-    if (left <= 0) return { ...next, taskTimeLeft: 0, phase: 'lost' };
+    if (left <= 0) {
+      /**
+       * 超时处理（用户定的规则）：
+       *   第一次 → 扣 2 步 + 计时器重置，不判负
+       *   第二次 → 判负
+       * 这样「目标色一直不来」不会一次就前功尽弃。
+       */
+      const used = state.timeoutsUsed ?? 0;
+      if (used === 0) {
+        const movesLeft = Math.max(0, next.movesLeft - 2);
+        return {
+          ...next,
+          taskTimeLeft: state.level.taskTimerSeconds ?? 0,
+          movesLeft,
+          timeoutsUsed: 1,
+          // 步数被扣到 0 也算失败
+          phase: movesLeft <= 0 ? 'lost' : 'idle',
+        };
+      }
+      return { ...next, taskTimeLeft: 0, timeoutsUsed: used + 1, phase: 'lost' };
+    }
     next = { ...next, taskTimeLeft: left };
   }
 
@@ -1361,7 +1394,11 @@ export function triggerSweep(
   // 如果这一跳正好让链走完，就直接判通关
   if (seqIndex >= chain.length) {
     return {
-      state: { ...next, phase: 'won', score: next.score + next.movesLeft * 100 },
+      state: {
+        ...next,
+        phase: 'won',
+        score: next.score + Math.min(next.movesLeft * 100, 800),
+      },
       ok: true,
       cleared: 0,
     };

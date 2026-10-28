@@ -569,10 +569,20 @@ test('倒计时会随时间减少', () => {
   assert.ok(Math.abs(before - after.taskTimeLeft - 1.5) < 0.001);
 });
 
-test('倒计时归零判负', () => {
+test('第一次超时扣 2 步不判负，第二次才失败', () => {
   const g = createGame(5, 42);
-  const done = tickTimer({ ...g, taskTimeLeft: 0.5 }, 1);
-  assert.equal(done.phase, 'lost');
+  const before = g.movesLeft;
+
+  // 第一次超时
+  const t1 = tickTimer({ ...g, taskTimeLeft: 0.5 }, 1);
+  assert.equal(t1.phase, 'idle', '第一次超时不该判负');
+  assert.equal(t1.movesLeft, before - 2, '应该扣 2 步');
+  assert.equal(t1.timeoutsUsed, 1);
+  assert.ok(t1.taskTimeLeft > 0, '计时器应该重置');
+
+  // 第二次超时
+  const t2 = tickTimer({ ...t1, taskTimeLeft: 0.5 }, 1);
+  assert.equal(t2.phase, 'lost', '第二次超时判负');
 });
 
 test('弹窗答题时倒计时不走（引擎层保证，这里验证状态）', () => {

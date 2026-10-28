@@ -94,6 +94,8 @@ export interface HudSnapshot {
   pendingReward: { kind: 'score' | 'moves'; amount: number; streak: number } | null;
   /** 当前连击数（连续完成任务次数） */
   taskStreak: number;
+  /** 本局用时（秒） */
+  elapsedSeconds: number;
   mode: GameMode;
   modeName: string;
   rescues: Array<{
@@ -1598,6 +1600,7 @@ export class GameEngine {
       sweepNextScore: sweepProgress(s).to,
       pendingReward: s.pendingReward,
       taskStreak: s.taskStreak,
+      elapsedSeconds: s.elapsedSeconds,
       mode: s.mode,
       modeName: s.modeConfig.name,
       sweepUsed: s.sweepUsed,

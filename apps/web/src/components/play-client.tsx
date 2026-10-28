@@ -77,6 +77,20 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
       setShowTutorial(true);
     }
   }, []);
+  // 连击数变大 → 盖一个章
+  useEffect(() => {
+    const streak = hud?.taskStreak ?? 0;
+    // ×1 没意义（还没形成连击），从 ×2 开始盖
+    if (streak >= 2 && streak > lastStreakRef.current) {
+      setStreakStamp({ n: streak, key: Date.now() });
+      const t = window.setTimeout(() => setStreakStamp(null), 620);
+      lastStreakRef.current = streak;
+      return () => window.clearTimeout(t);
+    }
+    lastStreakRef.current = streak;
+    return undefined;
+  }, [hud?.taskStreak]);
+
   // 奖励卡打开期间暂停倒计时
   useEffect(() => {
     engineRef.current?.setUiPaused((hud?.pendingReward ?? null) !== null);
@@ -86,6 +100,15 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
   const [avatar, setAvatar] = useState<AvatarConfig | null>(null);
   const [soundOn, setSoundOn] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
+  /**
+   * 连击盖章提示。
+   *
+   * 用户要求：「连击加一个短暂的弹出提示，就是显示乘 1 乘 2 这样子，
+   * 也用那个盖章的表现形式」。
+   * 所以每次 taskStreak 变大就盖一个 ×N 的章，600ms 后自动消失。
+   */
+  const [streakStamp, setStreakStamp] = useState<{ n: number; key: number } | null>(null);
+  const lastStreakRef = useRef(0);
 
   const level = getLevel(levelId);
   /**
@@ -486,6 +509,16 @@ export function PlayClient({ levelId, mode = 'normal' }: { levelId: number; mode
         sweepNextScore={hud?.sweepNextScore ?? 0}
         onSweep={sweep}
       />
+
+      {/* 连击盖章：×1 ×2 ×3 … */}
+      {streakStamp && (
+        <div className="pointer-events-none fixed inset-0 z-[70] flex items-center justify-center">
+          <div key={streakStamp.key} className="streak-stamp">
+            <span className="streak-stamp-label">连击</span>
+            <span>×{streakStamp.n}</span>
+          </div>
+        </div>
+      )}
 
       {/* 棋盘 */}
       <section className="relative mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">

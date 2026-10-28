@@ -453,6 +453,20 @@ export interface GameState {
   taskTimeLeft: number;
   /** 整关剩余秒数（0 = 没有整关倒计时） */
   levelTimeLeft: number;
+  /**
+   * 已经超时过几次。
+   *
+   * 用户定的规则：第一次超时扣 2 步、重置计时器，第二次超时才判负。
+   * 这样「目标色一直不来」不会一次就前功尽弃。
+   */
+  timeoutsUsed: number;
+  /**
+   * 本局实际游玩用时（秒）。
+   *
+   * 只在「能操作」的时候累加（暂停、弹窗、奖励卡都不算），
+   * 所以它是真实的「这一关花了多久」—— 后续做排行榜直接用这个值。
+   */
+  elapsedSeconds: number;
   /** 当前正在抓第几个隔间（0 开始） */
   seqIndex: number;
   /** 当前隔间已经抓了几只 */

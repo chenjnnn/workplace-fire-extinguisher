@@ -163,6 +163,13 @@ export function ResultOverlay({
 
       {/* 明细 */}
       <div className="mt-3 rounded-xl bg-white/86 px-4 shadow-sm">
+        <Row
+          label="本关用时"
+          value={(() => {
+            const sec = Math.round(state.elapsedSeconds ?? 0);
+            return sec >= 60 ? `${Math.floor(sec / 60)} 分 ${sec % 60} 秒` : `${sec} 秒`;
+          })()}
+        />
         <Row label="清理总数" value={`${summary.totalCleared} 个`} />
         <Row label="最高连锁" value={`${summary.maxChain} 连`} />
         <Row label="收网行动" value={`${summary.sweepUsed} 次`} />
