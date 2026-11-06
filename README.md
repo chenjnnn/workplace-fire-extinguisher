@@ -1,9 +1,22 @@
 # 💥 打飞坏领导
 
-> 交换相邻的坏人，三个连一起就能清场。
-> 网页版已完成，小程序版复用同一套内核。
+> 交换相邻的坏领导，三个连一起就能清场。
+> 一款把「被职场 PUA 却没处发作」做成玩法出口的三消小游戏。
 
-**现在就能玩：** http://localhost:3100
+<p align="center">
+  <img src="screenshots/1131-home-levelbtn.png" width="230" alt="首页" />
+  <img src="screenshots/1040-streak-stamp.png" width="230" alt="对局" />
+  <img src="screenshots/1130-levels-30.png" width="230" alt="关卡" />
+</p>
+
+**本地跑起来：** `npm run setup && npm run dev` → http://localhost:3100，不需要任何 API Key，开箱即跑。
+
+| | |
+|---|---|
+| 玩法 | 主线 30 关 + 每日挑战 + 加班无尽 |
+| 体量 | 静态导出 1.2 MB，零图片素材（角色全部 canvas 代码绘制） |
+| 质量 | 46 个内核单测 + 28 条 Playwright 端到端，全绿 |
+| 后续 | 内核与渲染分离，同一套内核直接复用到小程序 |
 
 ---
 
@@ -96,6 +109,13 @@ scripts/              Playwright 端到端验证
 **③ 确定性随机**
 所有随机走带种子的 RNG：每日挑战可全服同一副棋盘，出 bug 能凭种子 100% 复现。
 
+**④ 与 AI 结对开发**
+整个项目由一个 AI coding agent（DeepSeek Harness，deepseek-flash）与作者结对完成：
+作者定规则、目标值和验收标准，AI 负责写实现、补测试、跑平衡实验、按截图迭代 UI。
+为了让"AI 改代码"可控，工程上做了几件事——`docs/RULES-3.0.md` 里一条规则只留一种表述
+（早期"算完成/不算完成"并存时 AI 会反复改错方向）、随机走种子（bug 可 100% 复现）、
+Playwright 截图自检（改完能自证没坏）。
+
 ---
 
 ## 开发命令
@@ -103,7 +123,7 @@ scripts/              Playwright 端到端验证
 ```bash
 npm run dev        # 启动网站（:3100）
 npm run build      # 生产构建（静态导出到 apps/web/out）
-npm run test       # 内核单测（35 个）
+npm run test       # 内核单测（46 个）
 npm run typecheck  # 全仓库类型检查
 
 # 端到端验证（真实浏览器操作 + 截图）
@@ -115,6 +135,8 @@ PLAYWRIGHT_BROWSERS_PATH=./.pw-browsers node scripts/verify-interaction.mjs
 ## 文档
 
 - [设计与机制文档](docs/DESIGN.md) —— 合规边界、角色机制、关卡平衡实测数据、小程序化路线
+- [规则 v3.0](docs/RULES-3.0.md) —— 当前生效的完整规则，一条规则只留一种表述
+- [风险与修复](docs/RISK-FIXES.md) —— 11 条规则风险的处理方案与取舍
 
 调关卡平衡时踩过的坑都记在里面了，包括：
 - 保护伞「清整列」会自激爆炸（平均清 176 格，棋盘才 64 格）
